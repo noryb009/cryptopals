@@ -13,4 +13,10 @@ class Set1 extends FunSpec {
     val expected = "746865206b696420646f6e277420706c6179"
     assert(Hex.encode(XOR.xor(Hex.decode(a), Hex.decode(b))) == expected)
   }
+
+  it("C3") {
+    val str = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
+    val expected = "Cooking MC's like a pound of bacon"
+    assert(Utils.binaryToString(XOR.singleByte(Hex.decode(str))) == expected)
+  }
 }
