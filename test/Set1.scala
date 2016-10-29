@@ -11,12 +11,26 @@ class Set1 extends FunSpec {
     val a = "1c0111001f010100061a024b53535009181c"
     val b = "686974207468652062756c6c277320657965"
     val expected = "746865206b696420646f6e277420706c6179"
-    assert(Hex.encode(XOR.xor(Hex.decode(a), Hex.decode(b))) == expected)
+    assert(Hex.encode(XOR.xor(Hex.decode(a), Hex.decode(b).toIndexedSeq)) == expected)
   }
 
   it("C3") {
     val str = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
     val expected = "Cooking MC's like a pound of bacon"
     assert(Utils.binaryToString(XOR.singleByte(Hex.decode(str))) == expected)
+  }
+
+  it("C4") {
+    val strs = io.Source.fromFile("res/S1C4.txt").getLines.toSeq
+    val expected = "Now that the party is jumping\n"
+    assert(Utils.binaryToString(XOR.decryptOneOf(strs.map(Hex.decode))) == expected)
+  }
+
+  it("C5") {
+    val str = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
+    val key = "ICE"
+    val expected = "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272" +
+      "a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f"
+    assert(Hex.encode(XOR.xor(Utils.stringToBinary(str), Utils.stringToBinary(key).toIndexedSeq)) == expected)
   }
 }
