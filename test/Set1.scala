@@ -23,9 +23,9 @@ class Set1 extends FunSpec {
   }
 
   it("C4") {
-    val strs = io.Source.fromFile("res/S1C4.txt").getLines.toSeq
+    val strs = Hex.decodeLines("res/S1C4.txt")
     val expected = "Now that the party is jumping\n"
-    assert(Utils.binaryToString(XOR.decryptOneOf(strs.map(Hex.decode))) == expected)
+    assert(Utils.binaryToString(XOR.decryptOneOf(strs)) == expected)
   }
 
   it("C5") {
@@ -50,5 +50,10 @@ class Set1 extends FunSpec {
     val key = "YELLOW SUBMARINE"
     val start = "I'm back and I'm ringin' the bell \n"
     assert(Utils.binaryToString(AES.decrypt(data, key)).startsWith(start))
+  }
+
+  it("C8") {
+    val strs = Hex.decodeLines("res/S1C8.txt")
+    assert(strs.view.exists(AES.isECB))
   }
 }

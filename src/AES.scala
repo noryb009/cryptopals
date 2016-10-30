@@ -8,4 +8,7 @@ object AES {
     c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key.getBytes, "AES"))
     c.doFinal(data.toArray)
   }
+
+  def isECB(data: Seq[Byte]): Boolean =
+    data.sliding(16, 16).toSeq.distinct.length < (data.length + 15) / 16
 }
