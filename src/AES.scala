@@ -11,4 +11,7 @@ object AES {
 
   def isECB(data: Seq[Byte]): Boolean =
     data.sliding(16, 16).toSeq.distinct.length < (data.length + 15) / 16
+
+  def PKCS7(key: String, size: Int): String =
+    key.padTo(size, (size - key.length).asInstanceOf[Char])
 }
