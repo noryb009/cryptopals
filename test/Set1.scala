@@ -44,4 +44,11 @@ class Set1 extends FunSpec {
     assert(decrypted.startsWith(start))
     assert(decrypted.endsWith(end))
   }
+
+  it("C7") {
+    val data = Base64.decodeFile("res/S1C7.txt")
+    val key = "YELLOW SUBMARINE"
+    val start = "I'm back and I'm ringin' the bell \n"
+    assert(Utils.binaryToString(AES.decrypt(data, key)).startsWith(start))
+  }
 }
