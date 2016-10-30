@@ -37,7 +37,7 @@ class Set1 extends FunSpec {
   }
 
   it("C6") {
-    val str = Base64.decode(io.Source.fromFile("res/S1C6.txt").getLines.foldLeft("")(_ + _))
+    val str = Base64.decodeFile("res/S1C6.txt")
     val start = "I'm back and I'm ringin' the bell \n"
     val end = "Play that funky music \n"
     val decrypted = Utils.binaryToString(XOR.decryptUnknownKeySize(str).get)

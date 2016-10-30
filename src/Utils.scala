@@ -1,7 +1,7 @@
 object Utils {
-  def binaryToString(data: Seq[Int]) =
+  def binaryToString(data: Seq[Byte]) =
     data.map(_.asInstanceOf[Char]).mkString
 
-  def stringToBinary(data: String): Seq[Int] =
-    data.getBytes().map(_.asInstanceOf[Int])
+  def stringToBinary(data: String): Seq[Byte] =
+    data.getBytes
 }

@@ -1,15 +1,15 @@
 object Base64 {
   val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
   val equals = '='.toInt
-  val antiChars = chars.map(_.asInstanceOf[Int]).zipWithIndex.toMap + ('='.asInstanceOf[Int] -> equals)
+  val antiChars = chars.zipWithIndex.toMap + ('=' -> equals)
 
-  def encode(data: Seq[Int]): String =
+  def encode(data: Seq[Byte]): String =
     data
       .sliding(3, 3)
       .map {
-        case Seq(a: Int, b: Int, c: Int) => (3, (a << 16) + (b << 8) + c)
-        case Seq(a: Int, b: Int)         => (2, (a << 16) + (b << 8))
-        case Seq(a: Int)                 => (1, a << 16)
+        case Seq(a: Byte, b: Byte, c: Byte) => (3, (a << 16) + (b << 8) + c)
+        case Seq(a: Byte, b: Byte)          => (2, (a << 16) + (b << 8))
+        case Seq(a: Byte)                   => (1, a << 16)
       }
       .map {case (i, n) => (i, Seq(n >> 18, n >> 12, n >> 6, n).map{x => chars(x & 63)})}
 
@@ -20,11 +20,10 @@ object Base64 {
       }
       .mkString
 
-  def decode(str: String): Seq[Int] = {
+  def decode(str: String): Seq[Byte] = {
     str
       .sliding(4, 4)
       .map(_.filter(_ != '='))
-      .map(_.map(_.asInstanceOf[Int]))
       .map(_.map(antiChars))
       .map {
         case Seq(a, b, c, d) => (3, (a << 18) + (b << 12) + (c << 6) + d)
@@ -36,7 +35,10 @@ object Base64 {
         case (2, n) => Seq(n >> 16, n >> 8)
         case (1, n) => Seq(n >> 16)
       }
-      .map(a => a & 255)
+      .map(a => (a & 255).toByte)
       .toSeq
   }
+
+  def decodeFile(file: String): Seq[Byte] =
+    decode(io.Source.fromFile(file).getLines.foldLeft("")(_ + _))
 }
