@@ -120,9 +120,78 @@ object AES {
       EncMethod.CBC
   }
 
+  val checkOracleText = Utils.stringToBinary("z" + "a" * (16 * 3))
+
   def checkOracle: Boolean = {
-    val text = Utils.stringToBinary("z" + "a" * (16 * 3))
-    val o = encOracle(text)
+    val o = encOracle(checkOracleText)
     decOracle(o.data) == o.method
+  }
+
+  def decryptSuffix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
+    // (block size, textLen)
+    def findBlockSize: (Int, Int) = {
+      val startSize = encryptor(Seq()).length
+      @tailrec
+      def findBlockSizeInner(len: Int): (Int, Int) = {
+        val curSize = encryptor(Seq.fill(len)(0.toByte)).length
+        if(startSize != curSize) {
+          val blockSize = curSize - startSize
+          (blockSize, startSize - len)
+        } else
+          findBlockSizeInner(len + 1)
+      }
+      findBlockSizeInner(1)
+    }
+
+    type EncMap = Map[Seq[Byte], Seq[Byte]]
+
+    def getOrFetch(map: EncMap, prefix: Seq[Byte]): (EncMap, Seq[Byte]) = {
+      if(map.contains(prefix))
+        (map, map(prefix))
+      else {
+        val data = encryptor(prefix)
+        (map + (prefix -> data), data)
+      }
+    }
+
+    val (blockSize, textLen) = findBlockSize
+
+    @tailrec
+    def decryptByte(map: EncMap = Map[Seq[Byte], Seq[Byte]](), acc: Seq[Byte] = Seq()): Seq[Byte] = {
+      if(acc.length == textLen)
+        acc
+      else {
+        val curBlock = acc.length / blockSize
+        val prefixLen = blockSize - (acc.length % blockSize) - 1
+        val (map2, beforeAll) = getOrFetch(map, Seq.fill(prefixLen)('A'.toByte))
+        val before = beforeAll.slice(curBlock * blockSize, (curBlock + 1) * blockSize)
+
+        val prefix = (Seq.fill(blockSize)('A'.toByte) ++ acc).takeRight(blockSize - 1)
+        @tailrec
+        def getByte(map: EncMap, byte: Byte = 0): (EncMap, Byte) = {
+          val (newMap, dec) = getOrFetch(map, prefix :+ byte)
+          if(before == dec.slice(0, blockSize))
+            (newMap, byte)
+          else
+            getByte(newMap, (byte + 1).toByte)
+        }
+
+        val (map3, byte) = getByte(map2)
+        decryptByte(map3, acc :+ byte)
+      }
+    }
+
+    if(decOracle(encryptor(checkOracleText)) != EncMethod.ECB)
+      Seq()
+    else
+      decryptByte()
+  }
+
+  def checkDecryptSuffix(text: Seq[Byte]): Boolean = {
+    val key = randomString(16)
+    val encryptor = (prefix: Seq[Byte]) => encrypt(padPKCS7(prefix ++ text, 16), key)
+    val decrypted = decryptSuffix(encryptor)
+
+    text == decrypted
   }
 }

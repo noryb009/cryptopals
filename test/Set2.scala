@@ -21,4 +21,9 @@ class Set2 extends FunSpec {
     //for(a <- 1 to 200)
     assert(AES.checkOracle)
   }
+
+  it("C12") {
+    val str = Base64.decodeFile("res/S2C12.txt")
+    assert(AES.checkDecryptSuffix(str))
+  }
 }
