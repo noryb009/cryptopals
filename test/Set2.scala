@@ -26,4 +26,8 @@ class Set2 extends FunSpec {
     val str = Base64.decodeFile("res/S2C12.txt")
     assert(AES.checkDecryptSuffix(str))
   }
+
+  it("C13") {
+    assert(KeyVal.checkMakeAdmin)
+  }
 }
