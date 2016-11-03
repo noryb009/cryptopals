@@ -45,4 +45,8 @@ class Set2 extends FunSpec {
     assert(!validSuffix(Seq(5, 5, 5, 5)))
     assert(!validSuffix(Seq(1, 2, 3, 4)))
   }
+
+  it("C16") {
+    assert(KeyVal.checkMakeAdminSemi)
+  }
 }

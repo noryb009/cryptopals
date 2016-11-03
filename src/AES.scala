@@ -83,7 +83,8 @@ object AES {
             c.doFinal(XOR.xor(blk, v).toArray).toSeq
           else
             XOR.xor(c.doFinal(blk.toArray).toSeq, v)
-        processCBCBlock(rest, blk.toIndexedSeq, acc ++ dec)
+        val nextVec = if(enc == Enc.Encrypt) dec else blk
+        processCBCBlock(rest, nextVec.toIndexedSeq, acc ++ dec)
       }
     }
 
@@ -127,8 +128,10 @@ object AES {
     decOracle(o.data) == o.method
   }
 
+  type Encryptor = Seq[Byte] => Seq[Byte]
+
   // (block size, textLen)
-  def findBlockSize(encryptor: (Seq[Byte] => Seq[Byte])): (Int, Int) = {
+  def findBlockSize(encryptor: Encryptor): (Int, Int) = {
     val startSize = encryptor(Seq()).length
     @tailrec
     def findBlockSizeInner(len: Int): (Int, Int) = {
@@ -142,7 +145,7 @@ object AES {
     findBlockSizeInner(1)
   }
 
-  def decryptSuffix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
+  def decryptSuffix(encryptor: Encryptor): Seq[Byte] = {
     type EncMap = Map[Seq[Byte], Seq[Byte]]
 
     def getOrFetch(map: EncMap, prefix: Seq[Byte]): (EncMap, Seq[Byte]) = {
@@ -187,7 +190,7 @@ object AES {
       decryptByte()
   }
 
-  def decryptSuffixWithPrefix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
+  def decryptSuffixWithPrefix(encryptor: Encryptor): Seq[Byte] = {
     /* We don't care how long the prefix is, we just want it to be a multiple of 16.
      * We know it is a multiple of 16 when we can change the last byte of our padding
      * and change block x, but adding a new byte effects block x+1, and not x.
