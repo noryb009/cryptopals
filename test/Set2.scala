@@ -36,4 +36,13 @@ class Set2 extends FunSpec {
     //for(a <- 1 to 200)
     assert(AES.checkDecryptSuffixWithPrefix(str))
   }
+
+  it("C15") {
+    def validSuffix(s: Seq[Byte]) =
+      AES.unpadPKCS7(Utils.stringToBinary("ICE ICE BABY") ++ s).isDefined
+
+    assert(validSuffix(Seq(4, 4, 4, 4)))
+    assert(!validSuffix(Seq(5, 5, 5, 5)))
+    assert(!validSuffix(Seq(1, 2, 3, 4)))
+  }
 }
