@@ -30,4 +30,10 @@ class Set2 extends FunSpec {
   it("C13") {
     assert(KeyVal.checkMakeAdmin)
   }
+
+  it("C14") {
+    val str = Base64.decodeFile("res/S2C12.txt")
+    //for(a <- 1 to 200)
+    assert(AES.checkDecryptSuffixWithPrefix(str))
+  }
 }

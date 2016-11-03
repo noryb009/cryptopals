@@ -127,22 +127,22 @@ object AES {
     decOracle(o.data) == o.method
   }
 
-  def decryptSuffix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
-    // (block size, textLen)
-    def findBlockSize: (Int, Int) = {
-      val startSize = encryptor(Seq()).length
-      @tailrec
-      def findBlockSizeInner(len: Int): (Int, Int) = {
-        val curSize = encryptor(Seq.fill(len)(0.toByte)).length
-        if(startSize != curSize) {
-          val blockSize = curSize - startSize
-          (blockSize, startSize - len)
-        } else
-          findBlockSizeInner(len + 1)
-      }
-      findBlockSizeInner(1)
+  // (block size, textLen)
+  def findBlockSize(encryptor: (Seq[Byte] => Seq[Byte])): (Int, Int) = {
+    val startSize = encryptor(Seq()).length
+    @tailrec
+    def findBlockSizeInner(len: Int): (Int, Int) = {
+      val curSize = encryptor(Seq.fill(len)(0.toByte)).length
+      if(startSize != curSize) {
+        val blockSize = curSize - startSize
+        (blockSize, startSize - len)
+      } else
+        findBlockSizeInner(len + 1)
     }
+    findBlockSizeInner(1)
+  }
 
+  def decryptSuffix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
     type EncMap = Map[Seq[Byte], Seq[Byte]]
 
     def getOrFetch(map: EncMap, prefix: Seq[Byte]): (EncMap, Seq[Byte]) = {
@@ -154,7 +154,7 @@ object AES {
       }
     }
 
-    val (blockSize, textLen) = findBlockSize
+    val (blockSize, textLen) = findBlockSize(encryptor)
 
     @tailrec
     def decryptByte(map: EncMap = Map[Seq[Byte], Seq[Byte]](), acc: Seq[Byte] = Seq()): Seq[Byte] = {
@@ -187,10 +187,62 @@ object AES {
       decryptByte()
   }
 
+  def decryptSuffixWithPrefix(encryptor: (Seq[Byte] => Seq[Byte])): Seq[Byte] = {
+    /* We don't care how long the prefix is, we just want it to be a multiple of 16.
+     * We know it is a multiple of 16 when we can change the last byte of our padding
+     * and change block x, but adding a new byte effects block x+1, and not x.
+     */
+
+    val (blockSize, _) = findBlockSize(encryptor)
+
+    @tailrec
+    def findBlocks(a: Seq[Byte], b: Seq[Byte], block: Int = 0): Int = {
+      val from = block * blockSize
+      val to = from + blockSize
+      if(a.slice(from, to) == b.slice(from, to))
+        findBlocks(a, b, block + 1)
+      else
+        block + 1 // Everything up to and including this block is padding
+    }
+
+    val enc1 = encryptor(Seq(1))
+    val enc2 = encryptor(Seq(2))
+    val blocks = findBlocks(enc1, enc2)
+
+    val to = blocks * blockSize
+    val from = to - blockSize
+
+    @tailrec
+    def getPadding(enc1: Seq[Byte], acc: Seq[Byte] = Seq(1)): Seq[Byte] = {
+      val acc2 = 1.toByte +: acc
+      val enc2 = encryptor(acc2)
+      if(enc1.slice(from, to) == enc2.slice(from, to))
+        acc
+      else
+        getPadding(enc2, acc2)
+    }
+
+    // We start by adding one char to see how many full blocks the prefix is.
+
+    val padding = getPadding(enc1)
+
+    val encryptor2 = (prefix: Seq[Byte]) => encryptor(padding ++ prefix).splitAt(blockSize * blocks)._2
+    decryptSuffix(encryptor2)
+  }
+
   def checkDecryptSuffix(text: Seq[Byte]): Boolean = {
     val key = randomString(16)
     val encryptor = (prefix: Seq[Byte]) => encrypt(padPKCS7(prefix ++ text, 16), key)
     val decrypted = decryptSuffix(encryptor)
+
+    text == decrypted
+  }
+
+  def checkDecryptSuffixWithPrefix(text: Seq[Byte]): Boolean = {
+    val key = randomString(16)
+    val randomPrefix = randomBytes(Random.nextInt(49))
+    val encryptor = (prefix: Seq[Byte]) => encrypt(padPKCS7(randomPrefix ++ prefix ++ text, 16), key)
+    val decrypted = decryptSuffixWithPrefix(encryptor)
 
     text == decrypted
   }
