@@ -7,6 +7,9 @@ object XOR {
   def xor(a: Seq[Byte], k: Byte): Seq[Byte] =
     a.map{x => (x ^ k).toByte}
 
+  def xorEnd(a: Seq[Byte], b: Seq[Byte]) =
+    xor(a, IndexedSeq.fill[Byte](a.length - b.length)(0) ++ b)
+
   def singleScore(data: Seq[Byte]): Option[(Int, Byte)] = {
     def scoreSingle(k: Byte): Option[Int] = {
       val xored = xor(data, k)

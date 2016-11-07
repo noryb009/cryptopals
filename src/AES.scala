@@ -55,7 +55,7 @@ object AES {
 
   def unpadPKCS7(data: Seq[Byte], size: Int = 16): Option[Seq[Byte]] = {
     val padlen = data.last
-    if(!(1 to size).contains(padlen) || data.length < padlen)
+    if(data.length < padlen || padlen == 0 /* || !(1 to size).contains(padlen)*/)
       None
     else {
       val (unpadded, padding) = data.splitAt(data.length - padlen)
