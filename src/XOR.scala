@@ -7,6 +7,9 @@ object XOR {
   def xor(a: Seq[Byte], k: Byte): Seq[Byte] =
     a.map{x => (x ^ k).toByte}
 
+  def xorStream(a: Seq[Byte], k: Stream[Byte]): Seq[Byte] =
+    xor(a, k.take(a.length).toIndexedSeq)
+
   def xorEnd(a: Seq[Byte], b: Seq[Byte]) =
     xor(a, IndexedSeq.fill[Byte](a.length - b.length)(0) ++ b)
 

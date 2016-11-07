@@ -97,6 +97,27 @@ object AES {
   def decryptCBC(data: Seq[Byte], key: String, iv: Option[Seq[Byte]] = None): Seq[Byte] =
     processCBC(Enc.Decrypt, data, key, iv)
 
+  def keyStreamBlock(c: Cipher, nonce: Array[Byte], counter: Long): Seq[Byte] = {
+    val counterBytes = Seq.tabulate(8)(x => ((counter >> (x << 1)) & 0xFF).toByte)
+    c.doFinal(nonce ++ counterBytes)
+  }
+
+  type KeyStream = Stream[Byte]
+
+  def genKeyStream(key: String, nonce: Array[Byte] = Array.fill(8)(0), counter: Long = 0): KeyStream = {
+    val c = getAESCipher(key, Enc.Encrypt)
+
+    def loop(counter: Long): KeyStream =
+      keyStreamBlock(c, nonce, counter).toStream #::: loop(counter + 1)
+    loop(counter)
+  }
+
+  def encryptCTR(data: Seq[Byte], keyStream: KeyStream): Seq[Byte] =
+    XOR.xorStream(data, keyStream)
+
+  def decryptCTR(data: Seq[Byte], keyStream: KeyStream): Seq[Byte] =
+    encryptCTR(data, keyStream)
+
   case class OracleOutput(data: Seq[Byte], method: EncMethod.Value, key: String, prepend: Seq[Byte], append: Seq[Byte], iv: Seq[Byte])
 
   def encOracle(data: Seq[Byte]): OracleOutput = {

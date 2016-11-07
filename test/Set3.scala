@@ -26,4 +26,15 @@ class Set3 extends FunSpec {
       assert(dec == Utils.binaryToString(Base64.decode(str)))
     })
   }
+
+  it("C18") {
+    val data = Base64.decode("L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==")
+    val key = "YELLOW SUBMARINE"
+    val expected = "Yo, VIP Let's kick it Ice, Ice, baby Ice, Ice, baby "
+    assert(Utils.binaryToString(AES.decryptCTR(data, AES.genKeyStream(key))) == expected)
+
+    val rand = AES.randomBytes(40)
+    val key2 = AES.randomString(16)
+    assert(AES.decryptCTR(AES.encryptCTR(rand, AES.genKeyStream(key2)), AES.genKeyStream(key2)) == rand)
+  }
 }
