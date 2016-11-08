@@ -38,6 +38,31 @@ class Set3 extends FunSpec {
     assert(AES.decryptCTR(AES.encryptCTR(rand, AES.genKeyStream(key2)), AES.genKeyStream(key2)) == rand)
   }
 
+  /* TODO:
+   * These challenges, 19 and 20, could use a bit of work, mostly in the
+   * English-processing components.
+   */
+
+  def c19c20Helper(file: String): String = {
+    val data = Base64.decodeLines(file)
+    val key = AES.randomString(16)
+    val keyStream = AES.genKeyStream(key)
+    val encs = data.map(AES.encryptCTR(_, keyStream))
+    val minLen = encs.map(_.length).min
+    val total = encs.map(_.take(minLen)).reduceLeft[Seq[Byte]]{_ ++ _}
+    Utils.binaryToString(XOR.decryptKnownKeySize(total, minLen).get)
+  }
+
+  it("C19") {
+    val start = "i have met them at c"
+    assert(c19c20Helper("res/S3C19.txt").startsWith(start))
+  }
+
+  it("C20") {
+    val start = "I'm rated \"R\"...this is a warning, ya better void / P"
+    assert(c19c20Helper("res/S3C20.txt").startsWith(start))
+  }
+
   it("C21") {
     val mt = MersenneTwister.createStream(5)
     assert(mt.head == 953453411)

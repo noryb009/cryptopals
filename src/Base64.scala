@@ -39,6 +39,9 @@ object Base64 {
       .toSeq
   }
 
+  def decodeLines(file: String): Seq[Seq[Byte]] =
+    io.Source.fromFile(file).getLines.toSeq.map(decode)
+
   def decodeFile(file: String): Seq[Byte] =
     decode(io.Source.fromFile(file).getLines.foldLeft("")(_ + _))
 }
