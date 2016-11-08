@@ -43,7 +43,7 @@ object AES {
     processECB(Enc.Decrypt, data, key)
 
   def isECB(data: Seq[Byte]): Boolean =
-    data.sliding(16, 16).toSeq.distinct.length < (data.length + 15) / 16
+    data.grouped(16).toSeq.distinct.length < (data.length + 15) / 16
 
   def padPKCS7(data: Seq[Byte], size: Int = 16): Seq[Byte] = {
     val padlen = (data.length / size + 1) * size - data.length

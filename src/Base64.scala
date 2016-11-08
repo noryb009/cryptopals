@@ -5,7 +5,7 @@ object Base64 {
 
   def encode(data: Seq[Byte]): String =
     data
-      .sliding(3, 3)
+      .grouped(3)
       .map {
         case Seq(a: Byte, b: Byte, c: Byte) => (3, (a << 16) + (b << 8) + c)
         case Seq(a: Byte, b: Byte)          => (2, (a << 16) + (b << 8))
@@ -22,7 +22,7 @@ object Base64 {
 
   def decode(str: String): Seq[Byte] = {
     str
-      .sliding(4, 4)
+      .grouped(4)
       .map(_.filter(_ != '='))
       .map(_.map(antiChars))
       .map {

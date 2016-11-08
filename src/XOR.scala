@@ -81,7 +81,7 @@ object XOR {
 
   def transpose(data: Seq[Byte], size: Int): Seq[Seq[Byte]] =
     data
-      .sliding(size, size)
+      .grouped(size)
       .map(_.padTo(size, 0.asInstanceOf[Byte]))
       .toSeq
       .transpose
