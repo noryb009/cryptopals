@@ -1,3 +1,5 @@
+import java.util.Calendar
+
 import scala.annotation.tailrec
 
 object MersenneTwister {
@@ -94,5 +96,24 @@ object MersenneTwister {
     }
 
     loop(createMT(seed))
+  }
+
+  def getTime: Int =
+    (System.currentTimeMillis() / 1000).toInt
+
+  def getSeedFromOutput(num: Int): Option[Int] = {
+    val curTime = getTime
+
+    @tailrec
+    def tryTime(time: Int): Option[Int] = {
+      if(time + 2000 < curTime)
+        None
+      else if(createStream(time).head == num)
+        Some(time)
+      else
+        tryTime(time - 1)
+    }
+
+    tryTime(curTime)
   }
 }

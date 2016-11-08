@@ -67,4 +67,14 @@ class Set3 extends FunSpec {
     val mt = MersenneTwister.createStream(5)
     assert(mt.head == 953453411)
   }
+
+  it("C22") {
+    val seed = MersenneTwister.getTime
+    val mt = MersenneTwister.createStream(seed)
+    val num = mt.head
+    //val sleepTime = Math.abs(num) % 960 + 40
+    val sleepTime = Math.abs(num) % 5
+    Thread.sleep(sleepTime * 1000)
+    assert(MersenneTwister.getSeedFromOutput(num).get == seed)
+  }
 }
