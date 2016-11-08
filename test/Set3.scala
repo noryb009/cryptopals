@@ -37,4 +37,9 @@ class Set3 extends FunSpec {
     val key2 = AES.randomString(16)
     assert(AES.decryptCTR(AES.encryptCTR(rand, AES.genKeyStream(key2)), AES.genKeyStream(key2)) == rand)
   }
+
+  it("C21") {
+    val mt = MersenneTwister.createStream(5)
+    assert(mt.head == 953453411)
+  }
 }
