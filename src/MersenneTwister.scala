@@ -122,7 +122,7 @@ object MersenneTwister {
 
   def cloneStream(p: Stream[Int]): Stream[Int] = {
     def getBit(n: Int, s: Int) =
-      (n >> s) & 1
+      (n >>> s) & 1
     def setBit(n: Int, s: Int, value: Int) =
       n | (value << s)
 
@@ -134,11 +134,11 @@ object MersenneTwister {
         if(i == -1 || i == 32)
           acc
         else {
-          val xorr = if(i + s <= 31 && i + s >= 0) getBit(acc, i + s) else 0
-          inner(i + dir, setBit(acc, i, getBit(n, i) ^ xorr))
+          val xorr = if(i + s <= 31 && i + s >= 0) getBit(acc, i + s) & getBit(mask, i) else 0
+          inner(i - dir, setBit(acc, i, getBit(n, i) ^ xorr))
         }
       }
-      val start = if(s > 0) 0 else 31
+      val start = if(s > 0) 31 else 0
       inner(start)
     }
 
@@ -171,5 +171,4 @@ object MersenneTwister {
     val expected = enc.takeRight(len)
     range.filter(seed => encryptUsingMT(data, createStream(seed)).takeRight(len) == expected)
   }
-
 }
