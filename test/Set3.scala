@@ -85,4 +85,21 @@ class Set3 extends FunSpec {
     val mt2 = MersenneTwister.cloneStream(mt)
     assert(mt.take(MersenneTwister.N*2) == mt2.take(MersenneTwister.N*2))
   }
+
+  it("C24") {
+    def testSeed(range: Range, seed: Int): Boolean = {
+      val mt = MersenneTwister.createStream(seed)
+      val encryptor = (s: Seq[Byte]) => MersenneTwister.encryptUsingMT(AES.randomBytes(Random.nextInt(20)) ++ s, mt)
+      val seeds = MersenneTwister.getSeedFromEncrypted(encryptor, range)
+      seeds.contains(seed)
+    }
+
+    //val pow = Math.pow(2, 16).toInt
+    val pow = Math.pow(2, 8).toInt
+    assert(testSeed(0 until pow, Random.nextInt(pow)))
+    val time = MersenneTwister.getTime
+    //val diff = 500
+    val diff = 50
+    assert(testSeed((time - diff) to (time + diff), time))
+  }
 }

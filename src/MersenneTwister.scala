@@ -157,4 +157,19 @@ object MersenneTwister {
     val vals = p.take(N).map(untemper).toIndexedSeq
     createStream(MT(vals, 0))
   }
+
+  def encryptUsingMT(data: Seq[Byte], mt: Stream[Int]) =
+    XOR.xorStream(data, mt.map(_.toByte))
+
+  def decryptUsingMT(data: Seq[Byte], mt: Stream[Int]) =
+    encryptUsingMT(data, mt)
+
+  def getSeedFromEncrypted(encryptor: AES.Encryptor, range: Range): Seq[Int] = {
+    val len = 14
+    val enc = encryptor(Seq.fill[Byte](len)('A'))
+    val data = Seq.fill[Byte](enc.length)('A')
+    val expected = enc.takeRight(len)
+    range.filter(seed => encryptUsingMT(data, createStream(seed)).takeRight(len) == expected)
+  }
+
 }
