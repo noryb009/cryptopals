@@ -1,5 +1,7 @@
 import org.scalatest.FunSpec
 
+import scala.util.Random
+
 class Set3 extends FunSpec {
   val c17Data = Seq(
     "MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=",
@@ -76,5 +78,11 @@ class Set3 extends FunSpec {
     val sleepTime = Math.abs(num) % 5
     Thread.sleep(sleepTime * 1000)
     assert(MersenneTwister.getSeedFromOutput(num).get == seed)
+  }
+
+  it("C23") {
+    val mt = MersenneTwister.createStream(Random.nextInt)
+    val mt2 = MersenneTwister.cloneStream(mt)
+    assert(mt.take(MersenneTwister.N*2) == mt2.take(MersenneTwister.N*2))
   }
 }

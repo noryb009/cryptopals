@@ -89,14 +89,17 @@ object MersenneTwister {
     MT(mt, N)
   }
 
-  def createStream(seed: Int): Stream[Int] = {
+  def createStream(mt: MT): Stream[Int] = {
     def loop(mt: MT): Stream[Int] = {
       val (i, mt2) = mt.nextInt
       i #:: loop(mt2)
     }
 
-    loop(createMT(seed))
+    loop(mt)
   }
+
+  def createStream(seed: Int): Stream[Int] =
+    createStream(createMT(seed))
 
   def getTime: Int =
     (System.currentTimeMillis() / 1000).toInt
@@ -115,5 +118,43 @@ object MersenneTwister {
     }
 
     tryTime(curTime)
+  }
+
+  def cloneStream(p: Stream[Int]): Stream[Int] = {
+    def getBit(n: Int, s: Int) =
+      (n >> s) & 1
+    def setBit(n: Int, s: Int, value: Int) =
+      n | (value << s)
+
+    def undoShift(n: Int, s: Int, mask: Int = -1): Int = {
+      val dir = s / Math.abs(s)
+
+      @tailrec
+      def inner(i: Int, acc: Int = 0): Int = {
+        if(i == -1 || i == 32)
+          acc
+        else {
+          val xorr = if(i + s <= 31 && i + s >= 0) getBit(acc, i + s) else 0
+          inner(i + dir, setBit(acc, i, getBit(n, i) ^ xorr))
+        }
+      }
+      val start = if(s > 0) 0 else 31
+      inner(start)
+    }
+
+    def untemper(y5: Int): Int = {
+      //val y5 = y4 ^ (y4 >>> L)
+      val y4 = undoShift(y5, L)
+      //val y4 = y3 ^ ((y3 << T) & C)
+      val y3 = undoShift(y4, -T, C)
+      //val y3 = y2 ^ ((y2 << S) & B)
+      val y2 = undoShift(y3, -S, B)
+      //val y2 = y1 ^ (mt(i) >>> U)
+      undoShift(y2, U)
+      //val y1 = mt(i)
+    }
+
+    val vals = p.take(N).map(untemper).toIndexedSeq
+    createStream(MT(vals, 0))
   }
 }
