@@ -270,4 +270,10 @@ object AES {
 
     text == decrypted
   }
+
+  def editCTR(data: Seq[Byte], keyStream: KeyStream, offset: Int, newText: Seq[Byte]): Seq[Byte] =
+    data.take(offset) ++ encryptCTR(newText, keyStream.drop(offset)) ++ data.takeRight(data.length - offset - newText.length)
+
+  def attackEditCTR(data: Seq[Byte], editor: (Int, Seq[Byte]) => Seq[Byte]): Seq[Byte] =
+    AES.decryptCTR(data, editor(0, Seq.fill[Byte](data.length)(0)).toStream)
 }
