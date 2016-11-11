@@ -150,6 +150,7 @@ object AES {
   }
 
   type Encryptor = Seq[Byte] => Seq[Byte]
+  type Decryptor = Seq[Byte] => Seq[Byte]
 
   // (block size, textLen)
   def findBlockSize(encryptor: Encryptor): (Int, Int) = {
@@ -276,4 +277,20 @@ object AES {
 
   def attackEditCTR(data: Seq[Byte], editor: (Int, Seq[Byte]) => Seq[Byte]): Seq[Byte] =
     AES.decryptCTR(data, editor(0, Seq.fill[Byte](data.length)(0)).toStream)
+
+  def attackKeyAsIV(enc: Seq[Byte], decryptor: Decryptor): Option[String] = {
+    val attackEnc = enc.take(16) ++ Seq.fill[Byte](16)(0) ++ enc
+    /* We could iterate through until there's a high-ascii bit in the decrypted message.
+     * But there's an incredibly low chance of not having a high ascii bit.
+     */
+    val dec = unpadPKCS7(decryptor(attackEnc))
+    dec.map(x =>Utils.binaryToString(XOR.xor(x.take(16), x.slice(16*2, 16*3).toIndexedSeq)))
+  }
+
+  def runAttackKeyAsIV(key: String): Option[String] = {
+    val data = Utils.stringToBinary(randomString(16*3 + Random.nextInt(32)))
+    val enc = encryptCBC(padPKCS7(data), key, Some(Utils.stringToBinary(key)))
+    val decryptor = (data: Seq[Byte]) => decryptCBC(data, key, Some(Utils.stringToBinary(key)))
+    attackKeyAsIV(enc, decryptor)
+  }
 }

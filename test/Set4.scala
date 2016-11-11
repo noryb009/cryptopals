@@ -23,4 +23,9 @@ class Set4 extends FunSpec {
   it("C26") {
     assert(KeyVal.checkMakeAdminSemiCTR)
   }
+
+  it("C27") {
+    val key = AES.randomString(16)
+    assert(AES.runAttackKeyAsIV(key).get == key)
+  }
 }

@@ -13,19 +13,22 @@ object XOR {
   def xorEnd(a: Seq[Byte], b: Seq[Byte]) =
     xor(a, IndexedSeq.fill[Byte](a.length - b.length)(0) ++ b)
 
+  def asciiCompliance(data: Seq[Byte]): Boolean =
+    data.intersect((-128 to 8) ++ (14 to 21) ++ Seq(11, 12, 127)).isEmpty
+
   def singleScore(data: Seq[Byte]): Option[(Int, Byte)] = {
     def scoreSingle(k: Byte): Option[Int] = {
       val xored = xor(data, k)
-      xored.intersect((-128 to 8) ++ (14 to 21) ++ Seq(11, 12, 127)) match {
-        case Seq() => Some(xored.map{
+      if(asciiCompliance(xored))
+        Some(xored.map{
           case ' ' | 'a' | 'e' | 'i' | 'o' | 'u' => 3
           case x if x >= 'a' && x <= 'z' => 2
           case x if x >= 'A' && x <= 'Z' => 2
           case ',' | '/' => 1
           case _ => 0
         }.sum)
-        case _ => None
-      }
+      else
+        None
     }
 
     (0 to 255)
