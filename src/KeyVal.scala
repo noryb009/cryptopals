@@ -55,12 +55,14 @@ object KeyVal {
 
   def encryptComments(userdata: String, key: String): Seq[Byte] =
     AES.encryptCBC(AES.padPKCS7(Utils.stringToBinary(c1 ++ userdata ++ c2)), key)
-    //AES.encryptCBC(AES.padPKCS7(Utils.stringToBinary(c1)), key)
+
+  def encryptCommentsCTR(userdata: String, key: AES.KeyStream): Seq[Byte] =
+    AES.encryptCTR(Utils.stringToBinary(c1 ++ userdata ++ c2), key)
+
+  def invStr(s: String): String =
+    Utils.binaryToString(XOR.xor(Utils.stringToBinary(s), 1.toByte))
 
   def makeAdminSemi(encryptor: Encryptor) = {
-    def invStr(s: String): String =
-      Utils.binaryToString(XOR.xor(Utils.stringToBinary(s), 1.toByte))
-
     val data1 = "a" * 16
     val data2 = invStr("aaaaa;admin=true")
     val enc = encryptor(data1 ++ data2)
@@ -72,6 +74,14 @@ object KeyVal {
     d
   }
 
+  def makeAdminSemiCTR(encryptor: Encryptor): Seq[Byte] = {
+    val data = ";admin=true"
+    val inv = invStr(data)
+    val enc = encryptor(inv)
+
+    val a = Seq.fill[Byte](c1.length)(0) ++ Seq.fill[Byte](inv.length)(1) ++ Seq.fill[Byte](c2.length)(0)
+    XOR.xor(enc, a.toIndexedSeq)
+  }
   def isAdminSemi(data: Seq[Byte], key: String): Boolean = {
     AES.unpadPKCS7(AES.decryptCBC(data, key)) match {
       case Some(x) =>
@@ -80,10 +90,21 @@ object KeyVal {
     }
   }
 
+  def isAdminSemiCTR(data: Seq[Byte], key: AES.KeyStream): Boolean = {
+    KeyVal(Utils.binaryToString(AES.decryptCTR(data, key)), ";")
+      .exists{case (k, v) => k == "admin" && v == "true"}
+  }
   def checkMakeAdminSemi: Boolean = {
     val key = AES.randomString(16)
     val encryptor = (userdata: String) => encryptComments(clean(userdata, Seq(";", "=")), key)
     val enc = makeAdminSemi(encryptor)
     isAdminSemi(enc, key)
+  }
+
+  def checkMakeAdminSemiCTR: Boolean = {
+    val key = AES.genKeyStream(AES.randomString(16))
+    val encryptor = (userdata: String) => encryptCommentsCTR(clean(userdata, Seq(";", "=")), key)
+    val enc = makeAdminSemiCTR(encryptor)
+    isAdminSemiCTR(enc, key)
   }
 }

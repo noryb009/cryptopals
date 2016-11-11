@@ -19,4 +19,8 @@ class Set4 extends FunSpec {
 
     assert(AES.attackEditCTR(encData, editor) == data)
   }
+
+  it("C26") {
+    assert(KeyVal.checkMakeAdminSemiCTR)
+  }
 }
