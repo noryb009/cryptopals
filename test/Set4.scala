@@ -28,4 +28,16 @@ class Set4 extends FunSpec {
     val key = AES.randomString(16)
     assert(AES.runAttackKeyAsIV(key).get == key)
   }
+
+  it("C28") {
+    val message = "abc"
+    val messageBinary = Utils.stringToBinary(message)
+    val sha = "a9993e364706816aba3e25717850c26c9cd0d89d"
+    assert(Hex.encode(Hash.sha1(Utils.stringToBinary(message))) == sha)
+
+    val key = AES.randomString(16)
+    val hmac = Hash.sha1HMAC(messageBinary, key)
+    assert(Hash.sha1HMACCheck(messageBinary, key, hmac))
+    assert(!Hash.sha1HMACCheck(messageBinary :+ 1.toByte, key, hmac))
+  }
 }
