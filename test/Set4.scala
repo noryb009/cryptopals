@@ -35,7 +35,7 @@ class Set4 extends FunSpec {
     val message = "abc"
     val messageBinary = Utils.stringToBinary(message)
     val sha = "a9993e364706816aba3e25717850c26c9cd0d89d"
-    assert(Hex.encode(Hash.sha1(Utils.stringToBinary(message))) == sha)
+    assert(Hex.encode(Hash.sha1(messageBinary)) == sha)
 
     val key = AES.randomString(16)
     val hmac = Hash.sha1HMAC(messageBinary, key)
@@ -55,5 +55,23 @@ class Set4 extends FunSpec {
     assert(appendedText.startsWith(data))
     assert(appendedText.endsWith(suffix))
     assert(Hash.sha1HMACCheck(appendedData, key, newHMAC))
+  }
+
+  it("C30") {
+    val message = "abc"
+    val expected = "a448017aaf21d8525fc10ae87aa6729d"
+    assert(Hex.encode(Hash.md4(Utils.stringToBinary(message))) == expected)
+
+    val key = AES.randomString(Random.nextInt(64))
+    val data = Utils.stringToBinary(KeyVal.c1 ++ "foo" ++ KeyVal.c2)
+
+    val checkHMAC = (message: Seq[Byte], hmac: Seq[Byte]) => Hash.md4HMACCheck(message, key, hmac)
+    val hmac = Hash.md4HMAC(data, key)
+    val suffix = Utils.stringToBinary(";admin=true")
+    val (appendedData, newHMAC) = KeyVal.appendMD4HMAC(data, suffix, hmac, checkHMAC)
+    val appendedText = Utils.binaryToString(appendedData)
+    assert(appendedText.startsWith(data))
+    assert(appendedText.endsWith(suffix))
+    assert(Hash.md4HMACCheck(appendedData, key, newHMAC))
   }
 }

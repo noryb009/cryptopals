@@ -112,12 +112,14 @@ object KeyVal {
 
   type CheckHMAC = (Seq[Byte], Seq[Byte]) => Boolean
 
-  def appendSha1HMAC(data: Seq[Byte], suffix: Seq[Byte], hmac: Seq[Byte], checkHMAC: CheckHMAC): (Seq[Byte], Seq[Byte]) = {
+  type AppendHMAC = (Seq[Byte], Seq[Byte], Int) => Seq[Byte]
+  type GenPadding = (Int) => Seq[Byte]
+  def appendHMAC(data: Seq[Byte], suffix: Seq[Byte], hmac: Seq[Byte], checkHMAC: CheckHMAC, append: AppendHMAC, genPadding: GenPadding) = {
     @tailrec
     def inner(keyLen: Int): (Seq[Byte], Seq[Byte]) = {
       val origLen = data.length + keyLen
-      val newHMAC = Hash.appendSha1(hmac, suffix, origLen)
-      val paddedData = data ++ Hash.sha1Padding(origLen) ++ suffix
+      val newHMAC = append(hmac, suffix, origLen)
+      val paddedData = data ++ genPadding(origLen) ++ suffix
       if(checkHMAC(paddedData, newHMAC))
         (paddedData, newHMAC)
       else
@@ -126,4 +128,10 @@ object KeyVal {
 
     inner(0)
   }
+
+  def appendSha1HMAC(data: Seq[Byte], suffix: Seq[Byte], hmac: Seq[Byte], checkHMAC: CheckHMAC): (Seq[Byte], Seq[Byte]) =
+    appendHMAC(data, suffix, hmac, checkHMAC, Hash.appendSha1, Hash.sha1Padding)
+
+  def appendMD4HMAC(data: Seq[Byte], suffix: Seq[Byte], hmac: Seq[Byte], checkHMAC: CheckHMAC): (Seq[Byte], Seq[Byte]) =
+    appendHMAC(data, suffix, hmac, checkHMAC, Hash.appendMD4, Hash.md4Padding)
 }
