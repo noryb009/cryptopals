@@ -1,5 +1,7 @@
 import org.scalatest.FunSpec
 
+import scala.util.Random
+
 class Set4 extends FunSpec {
   it("C25") {
     def getPlaintext: Seq[Byte] = {
@@ -39,5 +41,19 @@ class Set4 extends FunSpec {
     val hmac = Hash.sha1HMAC(messageBinary, key)
     assert(Hash.sha1HMACCheck(messageBinary, key, hmac))
     assert(!Hash.sha1HMACCheck(messageBinary :+ 1.toByte, key, hmac))
+  }
+
+  it("C29") {
+    val key = AES.randomString(Random.nextInt(64))
+    val data = Utils.stringToBinary(KeyVal.c1 ++ "foo" ++ KeyVal.c2)
+
+    val checkHMAC = (message: Seq[Byte], hmac: Seq[Byte]) => Hash.sha1HMACCheck(message, key, hmac)
+    val hmac = Hash.sha1HMAC(data, key)
+    val suffix = Utils.stringToBinary(";admin=true")
+    val (appendedData, newHMAC) = KeyVal.appendSha1HMAC(data, suffix, hmac, checkHMAC)
+    val appendedText = Utils.binaryToString(appendedData)
+    assert(appendedText.startsWith(data))
+    assert(appendedText.endsWith(suffix))
+    assert(Hash.sha1HMACCheck(appendedData, key, newHMAC))
   }
 }

@@ -1,3 +1,5 @@
+import scala.annotation.tailrec
+
 object KeyVal {
   def clean(str: String, toClean: Seq[String] = Seq("=", "&")): String =
     toClean.foldLeft(str)(_.replaceAll(_, ""))
@@ -106,5 +108,22 @@ object KeyVal {
     val encryptor = (userdata: String) => encryptCommentsCTR(clean(userdata, Seq(";", "=")), key)
     val enc = makeAdminSemiCTR(encryptor)
     isAdminSemiCTR(enc, key)
+  }
+
+  type CheckHMAC = (Seq[Byte], Seq[Byte]) => Boolean
+
+  def appendSha1HMAC(data: Seq[Byte], suffix: Seq[Byte], hmac: Seq[Byte], checkHMAC: CheckHMAC): (Seq[Byte], Seq[Byte]) = {
+    @tailrec
+    def inner(keyLen: Int): (Seq[Byte], Seq[Byte]) = {
+      val origLen = data.length + keyLen
+      val newHMAC = Hash.appendSha1(hmac, suffix, origLen)
+      val paddedData = data ++ Hash.sha1Padding(origLen) ++ suffix
+      if(checkHMAC(paddedData, newHMAC))
+        (paddedData, newHMAC)
+      else
+        inner(keyLen + 1)
+    }
+
+    inner(0)
   }
 }
