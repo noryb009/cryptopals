@@ -75,7 +75,16 @@ class Set4 extends FunSpec {
     assert(Hash.md4HMACCheck(appendedData, key, newHMAC))
   }
 
-  it("C31") {
+  /* These tests work, but:
+   * 1) they require the server to be up
+   * 2) they take a while
+   * 3) they can fail, especially if another process is using a lot of resources
+   */
+  ignore("C31") {
     assert(TimingAttack.getSig.get.length == 16)
+  }
+
+  ignore("C32") {
+    assert(TimingAttack.getSigFast(3, 7).get.length == 16)
   }
 }

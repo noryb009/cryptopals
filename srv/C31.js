@@ -26,8 +26,13 @@ var insecureCompare = function(a, b, sleep, cb) {
                 return cb(false);
             } else if(a.charAt(digit) != b.charAt(digit)) {
                 return cb(false);
+            } else if(sleep < 50) {
+                var stop = sleep + (new Date().getTime());
+                while((new Date().getTime()) < stop) {
+                }
+                return cmpDigit(digit + 1)();
             } else {
-                setTimeout(cmpDigit(digit + 1), sleep);
+                return setTimeout(cmpDigit(digit + 1), sleep);
             }
         }
     }
@@ -56,7 +61,7 @@ http.createServer(function(req, res) {
         } else {
             res.writeHead(500, {'Content-Type': 'text/plain'});
             res.end();
-            console.log(hmacExp + ", " + hmacAct);
+            //console.log(hmacExp + ", " + hmacAct);
         }
     });
 }).listen(8080);
