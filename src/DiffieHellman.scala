@@ -20,6 +20,77 @@ object DiffieHellman {
     KeyPair(pub, priv)
   }
 
-  def generateSession(otherPub: BigInt, priv: BigInt): BigInt =
-    otherPub.modPow(priv, otherPub)
+  def generateSession(otherPub: BigInt, priv: BigInt, p: BigInt = np): BigInt =
+    otherPub.modPow(priv, p)
+
+  object EchoBot {
+    def sessionToKey(s: BigInt) =
+      Hex.encode(Hash.sha1(s.toByteArray)).take(16)
+
+    case class BotStatus(p: BigInt, kp: KeyPair, otherPub: BigInt) {
+      lazy val key =
+        sessionToKey(generateSession(otherPub, kp.priv, p))
+    }
+
+    def startA: (BotStatus, (BigInt, BigInt, BigInt)) = {
+      val bot = BotStatus(np, generateKeyPair(np, ng), 0)
+      (bot, (np, ng, bot.kp.pub))
+    }
+
+    def startB(params: (BigInt, BigInt, BigInt)): (BotStatus, BigInt) = {
+      val (p, g, otherPub) = params
+      val bot = BotStatus(p, generateKeyPair(p, g), otherPub)
+      (bot, bot.kp.pub)
+    }
+
+    def finishA(botStatus: BotStatus, otherPub: BigInt): BotStatus =
+      BotStatus(botStatus.p, botStatus.kp, otherPub)
+
+    def sendMessage(bot: BotStatus, text: String): Seq[Byte] = {
+      val iv = AES.randomBytes(16)
+      iv ++ AES.encryptCBC(AES.padPKCS7(Utils.stringToBinary(text)), bot.key, Some(iv))
+    }
+
+    def recvMessage(key: String, data: Seq[Byte]): String = {
+      val (iv, enc) = data.splitAt(16)
+      Utils.binaryToString(AES.unpadPKCS7(AES.decryptCBC(enc, key, Some(iv))).get)
+    }
+
+    def recvMessage(bot: BotStatus, data: Seq[Byte]): String =
+      recvMessage(bot.key, data)
+
+    def echoMessage(bot: BotStatus, data: Seq[Byte]): Seq[Byte] = {
+      val text = recvMessage(bot, data)
+      sendMessage(bot, text)
+    }
+
+    def testEchoBot(message: String): String = {
+      val (aPrime, initB) = startA
+      val (b, initA) = startB(initB)
+      val a = finishA(aPrime, initA)
+
+      val encA = sendMessage(a, message)
+      val encB = echoMessage(b, encA)
+      recvMessage(a, encB)
+    }
+
+    def mBot(message: String) = {
+      val (aPrime, initB) = startA
+      val (b, initA) = startB(initB._1, initB._2, initB._1)
+      val a = finishA(aPrime, initB._1)
+
+      val encA = sendMessage(a, message)
+      val encB = echoMessage(b, encA)
+
+      // Note that key is sha1(0)
+      val key = sessionToKey(0)
+      val mA = recvMessage(key, encA)
+      val mB = recvMessage(key, encB)
+
+      if(mA == mB)
+        mA
+      else
+        ""
+    }
+  }
 }
