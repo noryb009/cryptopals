@@ -74,4 +74,8 @@ class Set4 extends FunSpec {
     assert(appendedText.endsWith(suffix))
     assert(Hash.md4HMACCheck(appendedData, key, newHMAC))
   }
+
+  it("C31") {
+    assert(TimingAttack.getSig.get.length == 16)
+  }
 }
