@@ -10,9 +10,17 @@ class Set5 extends FunSpec {
   }
 
   it("C34") {
-    val str = AES.randomString(Random.nextInt(48))
-    assert(DiffieHellman.EchoBot.testEchoBot(str) == str)
+    val str = AES.randomString(Random.nextInt(48) + 16)
+    assert(DiffieHellman.EchoBot.testEchoBot(str).get == str)
 
-    assert(DiffieHellman.EchoBot.mBot(str) == str)
+    assert(DiffieHellman.EchoBot.mBot(str).get == str)
+  }
+
+  it("C35") {
+    val str = AES.randomString(Random.nextInt(48) + 16)
+
+    assert(DiffieHellman.EchoBot.mBotG1(str).get == str)
+    assert(DiffieHellman.EchoBot.mBotGP(str).get == str)
+    assert(DiffieHellman.EchoBot.mBotGPm1(str).get == str)
   }
 }
