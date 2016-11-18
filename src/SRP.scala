@@ -66,4 +66,41 @@ object SRP {
 
   def badClient: Boolean =
     clientLogin("", bad = true)
+
+  def badSimpleServerInit = {
+    val salt = Random.nextInt
+    val x = calcX(salt, P)
+    val v = calcV(x)
+
+    def sendEmail(I: String, aPub: BigInt) = {
+      val kp = DiffieHellman.generateKeyPair(N, g)
+      val u = BigInt(128, Random)
+
+      def checkHMAC(clientHMAC: Seq[Byte]): Boolean = {
+        val s = (aPub * v.modPow(u, N)).modPow(kp.priv, N)
+
+        val key = sToKey(s)
+
+        val serverHMAC = Hash.sha1HMAC(s.toByteArray, key)
+        clientHMAC == serverHMAC
+      }
+      (salt, kp.pub, u, (c: Seq[Byte]) => checkHMAC(c))
+    }
+
+    (I: String, aPub: BigInt) => sendEmail(I, aPub)
+  }
+
+  def simpleClient = {
+    val password = P
+    val sendEmail = badSimpleServerInit
+    val kp = DiffieHellman.generateKeyPair(N, g)
+    val (salt, bPub, u, checkHMAC) = sendEmail(email, kp.pub)
+    val x = calcX(salt, password)
+    val s = bPub.modPow(kp.priv + u * x, N)
+
+    val key = sToKey(s)
+    val hmac = Hash.sha1HMAC(s.toByteArray, key)
+
+    checkHMAC(hmac)
+  }
 }

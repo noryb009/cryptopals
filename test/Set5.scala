@@ -31,4 +31,8 @@ class Set5 extends FunSpec {
   it("C37") {
     assert(SRP.badClient)
   }
+
+  it("C38") {
+    assert(SRP.simpleClient)
+  }
 }
