@@ -46,18 +46,24 @@ object SRP {
     (I: String, A: BigInt) => sendEmail(I, A)
   }
 
-  def client: Boolean = {
+  def clientLogin(password: String, bad: Boolean): Boolean = {
     val sendEmail = serverInit
-    val kp = DiffieHellman.generateKeyPair(N, g)
+    val kp = if(bad) DiffieHellman.KeyPair(N*Random.nextInt(5), 0) else DiffieHellman.generateKeyPair(N, g)
     val (salt, bPub, checkHMAC) = sendEmail(email, kp.pub)
     val u = calcU(kp.pub, bPub)
-    val x = calcX(salt, P)
+    val x = calcX(salt, password)
     val v = calcV(x)
-    val s = (bPub - k * v).modPow(kp.priv + u * x, N)
+    val s = if(bad) BigInt(0) else (bPub - k * v).modPow(kp.priv + u * x, N)
 
     val key = sToKey(s)
     val hmac = Hash.sha1HMAC(s.toByteArray, key)
 
     checkHMAC(hmac)
   }
+
+  def client: Boolean =
+    clientLogin(P, bad = false)
+
+  def badClient: Boolean =
+    clientLogin("", bad = true)
 }
