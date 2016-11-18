@@ -67,23 +67,33 @@ object SRP {
   def badClient: Boolean =
     clientLogin("", bad = true)
 
+  val badSalt = 0
+  val badPriv = 2
+  val dictSize = 100 // could be any dictionary
+
+  def crackPassword(clientHMAC: Seq[Byte], aPub: BigInt): String = {
+    (0 until dictSize).par.find{p =>
+      val x = calcX(badSalt, p.toString)
+      val v = calcV(x)
+      val s = (aPub * v).modPow(badPriv, N)
+
+      val key = sToKey(s)
+      val serverHMAC = Hash.sha1HMAC(s.toByteArray, key)
+      serverHMAC == clientHMAC
+    }.getOrElse(-1).toString
+  }
+
   def badSimpleServerInit = {
-    val salt = Random.nextInt
-    val x = calcX(salt, P)
-    val v = calcV(x)
+    val salt = badSalt
 
     def sendEmail(I: String, aPub: BigInt) = {
-      val kp = DiffieHellman.generateKeyPair(N, g)
-      val u = BigInt(128, Random)
+      val b = badPriv
+      val kp = DiffieHellman.KeyPair(g.modPow(b, N), b)
+      val u = 1
 
-      def checkHMAC(clientHMAC: Seq[Byte]): Boolean = {
-        val s = (aPub * v.modPow(u, N)).modPow(kp.priv, N)
+      def checkHMAC(clientHMAC: Seq[Byte]): String =
+        crackPassword(clientHMAC, aPub)
 
-        val key = sToKey(s)
-
-        val serverHMAC = Hash.sha1HMAC(s.toByteArray, key)
-        clientHMAC == serverHMAC
-      }
       (salt, kp.pub, u, (c: Seq[Byte]) => checkHMAC(c))
     }
 
@@ -91,7 +101,7 @@ object SRP {
   }
 
   def simpleClient = {
-    val password = P
+    val password = Random.nextInt(dictSize).toString
     val sendEmail = badSimpleServerInit
     val kp = DiffieHellman.generateKeyPair(N, g)
     val (salt, bPub, u, checkHMAC) = sendEmail(email, kp.pub)
@@ -101,6 +111,6 @@ object SRP {
     val key = sToKey(s)
     val hmac = Hash.sha1HMAC(s.toByteArray, key)
 
-    checkHMAC(hmac)
+    checkHMAC(hmac) == password
   }
 }
