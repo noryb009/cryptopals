@@ -23,4 +23,8 @@ class Set5 extends FunSpec {
     assert(DiffieHellman.EchoBot.mBotGP(str).get == str)
     assert(DiffieHellman.EchoBot.mBotGPm1(str).get == str)
   }
+
+  it("C36") {
+    assert(SRP.client)
+  }
 }
