@@ -35,4 +35,12 @@ class Set5 extends FunSpec {
   it("C38") {
     assert(SRP.simpleClient)
   }
+
+  it("C39") {
+    val data = Utils.stringToBinary(AES.randomString(16)) // Binary must start with 0 bit to be positive
+    val kp = RSA.genKeyPair()
+    val enc = RSA.encrypt(data, kp)
+    val dec = RSA.decrypt(enc, kp).toByteArray.toSeq
+    assert(dec == data)
+  }
 }
