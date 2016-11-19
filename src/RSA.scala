@@ -78,16 +78,20 @@ object RSA {
     (sum, nTotal)
   }
 
-  def eRoot(n: BigInt): Option[BigInt] = {
+  def eRootFloor(n: BigInt): BigInt = {
     @tailrec
-    def inner(low: BigInt, high: BigInt): Option[BigInt] = {
-      if(low > high)
-        None
-      else {
+    def inner(low: BigInt, high: BigInt): BigInt = {
+      if(low > high) {
+        val midp = low.pow(e.toInt)
+        if(midp > n)
+          high
+        else
+          low
+      } else {
         val mid = (low + high) / 2
         val midp = mid.pow(e.toInt)
         if(midp == n)
-          Some(mid)
+          mid
         else if(midp > n)
           inner(low, mid - 1)
         else
@@ -96,6 +100,14 @@ object RSA {
     }
 
     inner(0, n)
+  }
+
+  def eRoot(n: BigInt): Option[BigInt] = {
+    val floor = eRootFloor(n)
+    if(floor.pow(e.toInt) == n)
+      Some(floor)
+    else
+      None
   }
 
   def broadcastAttack(encryptor: () => (RSAPub, BigInt)): Option[BigInt] = {
@@ -125,5 +137,47 @@ object RSA {
     val p = (pPrime * s.modInverse(pub.n)) % pub.n
 
     Utils.binaryToString(p.toByteArray)
+  }
+
+  object Sign {
+    val explen = 1024 / 8
+    val hashlen = 128 / 8
+    val asn1MD4 = Seq(0x01, 0x03) // or something like that
+    val endOfPadding = 0x00.toByte +: asn1MD4.map(_.toByte)
+
+    def padAndSign(data: Seq[Byte], kp: RSAKey): BigInt = {
+      val hash = Hash.md4(data)
+      val dec = (Seq(0x0, 0x1) ++ Seq.fill(explen - 2 - hashlen - 1 - asn1MD4.length)(0xff) ++ Seq(0x00) ++ asn1MD4).map(_.toByte) ++ hash
+      decrypt(BigInt(dec.toArray), kp)
+    }
+
+    def validateSignature(data: Seq[Byte], signature: BigInt, pub: RSAPub): Boolean = {
+      val decWrongSize = encrypt(signature, pub).toByteArray
+      val dec = Seq.fill[Byte](explen - decWrongSize.length)(0) ++ decWrongSize
+
+      // EB = 00 || BT (01) || PS (FF * (k-3-|D|)) || 00 || D
+
+      if(dec.length != explen || !dec.startsWith(Seq(0x0, 0x1, 0xff).map(_.toByte)))
+        false
+      else {
+        val endStart = dec.slice(2, explen).indexOf(0x00.toByte) + 2
+        val hashStart = endStart + endOfPadding.length
+        if(dec.slice(endStart, hashStart) != endOfPadding)
+          false
+        else {
+          val hash = Hash.md4(data)
+          hash == dec.slice(hashStart, hashStart + hash.length)
+        }
+      }
+    }
+
+    def forgeSignature(data: Seq[Byte], pub: RSAPub): BigInt = {
+      val hash = Hash.md4(data)
+      val start = (Seq(0x0, 0x1, 0xff, 0x00) ++ asn1MD4).map(_.toByte) ++ hash
+      val end = Seq.fill(explen - start.length)(0xff.toByte)
+
+      val max = BigInt((start ++ end).toArray)
+      eRootFloor(max)
+    }
   }
 }
