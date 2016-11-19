@@ -32,7 +32,7 @@ class Set6 extends FunSpec {
 
   it("C43") {
     val data = AES.randomBytes(Random.nextInt(32))
-    val kp = DSA.genKeyPair
+    val kp = DSA.genKeyPair()
 
     val (kk, sig) = kp.sign(data)
     assert(kp.toPub.validate(data, sig))
