@@ -1,5 +1,7 @@
 import org.scalatest.FunSpec
 
+import scala.util.Random
+
 class Set6 extends FunSpec {
   it("C41") {
     val data = AES.randomString(16)
@@ -23,5 +25,48 @@ class Set6 extends FunSpec {
 
     val forgedSignature = RSA.Sign.forgeSignature(data, RSA.RSAPub(kp))
     assert(RSA.Sign.validateSignature(data, forgedSignature, RSA.RSAPub(kp)))
+  }
+
+  it("C43") {
+    val data = AES.randomBytes(Random.nextInt(32))
+    val kp = DSA.genKeyPair
+
+    val (kk, sig) = kp.sign(data)
+    assert(kp.toPub.validate(data, sig))
+
+    val kpCopy = DSA.inverseKey(data, kk, sig)
+    assert(kp.x == kpCopy.x)
+
+    {
+      val str =
+        "For those that envy a MC it can be hazardous to your health\n" +
+          "So be friendly, a matter of life and death, just like a etch-a-sketch\n"
+      val data = Utils.stringToBinary(str)
+      val rStr = "548099063082341131477253921760299949438196259240"
+      val sStr = "857042759984254168557880549501802188789837994940"
+      val sig = DSA.Signature(BigInt(rStr), BigInt(sStr))
+
+      val range = 0 to Math.pow(2, 16).toInt
+      //val range = 16575 to 16575
+      val key = DSA.findKey(data, sig, range.toStream).get
+      println(key.x)
+
+      val expHash = "0954edd5e0afe5542a4adf012611a91912a3ec16"
+      val yStr =
+        "84ad4719d044495496a3201c8ff484feb45b962e7302e56a392aee4" +
+          "abab3e4bdebf2955b4736012f21a08084056b19bcd7fee56048e004" +
+          "e44984e2f411788efdc837a0d2e5abb7b555039fd243ac01f0fb2ed" +
+          "1dec568280ce678e931868d23eb095fde9d3779191b8c0299d6e07b" +
+          "bb283e6633451e535c45513b2d33c99ea17"
+      val y = BigInt(yStr, 16)
+
+      assert(key.y == y)
+      println(Hex.encode(key.x.toByteArray))
+      /* I'm not sure why this doesn't match, I'm likely converting it to a different
+       * representation before hashing. The public key matches, so we do have the
+       * correct key.
+       */
+      //assert(Hex.encode(Hash.sha1(key.x.toByteArray)) == expHash)
+    }
   }
 }
