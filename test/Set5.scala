@@ -43,4 +43,14 @@ class Set5 extends FunSpec {
     val dec = RSA.decrypt(enc, kp).toByteArray.toSeq
     assert(dec == data)
   }
+
+  it("C40") {
+    val data = BigInt(128, Random)
+    val encryptor = () => {
+      val kp = RSA.genKeyPair() // TODO
+      (RSA.RSAPub(kp), RSA.encrypt(data, kp))
+    }
+    val a = RSA.broadcastAttack(encryptor)
+    assert(a.get == data)
+  }
 }

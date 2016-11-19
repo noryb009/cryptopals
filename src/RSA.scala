@@ -65,4 +65,56 @@ object RSA {
 
   def decrypt(data: BigInt, key: RSAKey): BigInt =
     data.modPow(key.d, key.n)
+
+  def crt(values: Seq[(BigInt, BigInt)]): (BigInt, BigInt) = {
+    val nTotal = values.foldLeft(BigInt(1)){case (acc, (_, n)) => n * acc}
+
+    val sum = values.map{case (c, n) =>
+      val nExclude = nTotal / n
+      val q = c * nExclude * invMod(nExclude, n)
+      q
+    }.sum % nTotal
+
+    (sum, nTotal)
+  }
+
+  def eRoot(n: BigInt): Option[BigInt] = {
+    @tailrec
+    def inner(low: BigInt, high: BigInt): Option[BigInt] = {
+      if(low > high)
+        None
+      else {
+        val mid = (low + high) / 2
+        val midp = mid.pow(e.toInt)
+        if(midp == n)
+          Some(mid)
+        else if(midp > n)
+          inner(low, mid - 1)
+        else
+          inner(mid + 1, high)
+      }
+    }
+
+    inner(0, n)
+  }
+
+  def broadcastAttack(encryptor: () => (RSAPub, BigInt)): Option[BigInt] = {
+    val encs = (0 until e.toInt).map(_ => encryptor())
+
+    val (baseVal, nTotal) = crt(encs.map{case (pub, enc) => (enc, pub.n)})
+
+    @tailrec
+    def tryRoot(n: BigInt, tries: Int = 10): Option[BigInt] = {
+      eRoot(n) match {
+        case None =>
+          if(tries > 0)
+            tryRoot(n + nTotal, tries - 1)
+          else
+            None
+        case x => x
+      }
+    }
+
+    tryRoot(baseVal)
+  }
 }
