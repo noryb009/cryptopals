@@ -27,6 +27,9 @@ class Set6 extends FunSpec {
     assert(RSA.Sign.validateSignature(data, forgedSignature, RSA.RSAPub(kp)))
   }
 
+  def matchPrivKey(key: DSA.KeyPair, expHash: String): Boolean =
+    Hex.encode(Hash.sha1(key.x.toString(16).getBytes)) == expHash
+
   it("C43") {
     val data = AES.randomBytes(Random.nextInt(32))
     val kp = DSA.genKeyPair
@@ -46,10 +49,9 @@ class Set6 extends FunSpec {
       val sStr = "857042759984254168557880549501802188789837994940"
       val sig = DSA.Signature(BigInt(rStr), BigInt(sStr))
 
-      val range = 0 to Math.pow(2, 16).toInt
-      //val range = 16575 to 16575
+      //val range = 0 to Math.pow(2, 16).toInt
+      val range = 16575 to 16575
       val key = DSA.findKey(data, sig, range.toStream).get
-      println(key.x)
 
       val expHash = "0954edd5e0afe5542a4adf012611a91912a3ec16"
       val yStr =
@@ -61,12 +63,24 @@ class Set6 extends FunSpec {
       val y = BigInt(yStr, 16)
 
       assert(key.y == y)
-      println(Hex.encode(key.x.toByteArray))
-      /* I'm not sure why this doesn't match, I'm likely converting it to a different
-       * representation before hashing. The public key matches, so we do have the
-       * correct key.
-       */
-      //assert(Hex.encode(Hash.sha1(key.x.toByteArray)) == expHash)
+      assert(matchPrivKey(key, expHash))
     }
+  }
+
+  it("C44") {
+    val yStr =
+      "2d026f4bf30195ede3a088da85e398ef869611d0f68f07" +
+        "13d51c9c1a3a26c95105d915e2d8cdf26d056b86b8a7b8" +
+        "5519b1c23cc3ecdc6062650462e3063bd179c2a6581519" +
+        "f674a61f1d89a1fff27171ebc1b93d4dc57bceb7ae2430" +
+        "f98a6a4d83d8279ee65d71c1203d2c96d65ebbf7cce9d3" +
+        "2971c3de5084cce04a2e147821"
+    val y = BigInt(yStr, 16)
+
+    val expHash = "ca8f6f7c66fa362d40760d135b763eb8527d3d52"
+    val messages = DSA.readSignedMessages("res/S6C44.txt").toList
+    val key = DSA.findReusedK(messages).get
+    assert(key.y == y)
+    assert(matchPrivKey(key, expHash))
   }
 }

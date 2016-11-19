@@ -86,6 +86,11 @@ object DSA {
     }
   }
 
+  def inverseKeyHash(z: BigInt, subKey: SubKey, sig: Signature): KeyPair = {
+    val x = ((sig.s * subKey.k) - z) * sig.r.modInverse(q) % q
+    KeyPair(x)
+  }
+
   def inverseKey(data: Seq[Byte], subKey: SubKey, sig: Signature): KeyPair = {
     val z = hashValue(Hash.sha1(data))
     val x = ((sig.s * subKey.k) - z) * sig.r.modInverse(q) % q
@@ -103,4 +108,50 @@ object DSA {
       }.map{k => (k, inverseKey(data, k, sig))}
       .find{case (k, x) => sig == sign(data, x, None, k)._2}
       .map(_._2)
+
+  case class SignedMessage(message: String, sig: Signature) {
+    val data = Utils.stringToBinary(message)
+    val hash = Hash.sha1(data)
+    val hashValue = BigInt(1, hash.toArray)
+  }
+
+  def readSignedMessages(file: String): Seq[SignedMessage] =
+    io.Source.fromFile(file).getLines
+      .map(_.split(" ", 2)(1))
+      .grouped(4)
+      .map{case Seq(msg, s, r, m) => SignedMessage(msg, Signature(BigInt(r), BigInt(s)))}
+      .toSeq
+
+  def findReusedSubkey(m1: SignedMessage, m2: SignedMessage): Option[SubKey] = {
+    def modSub(a: BigInt, b: BigInt) =
+      if(a > b) a - b else b - a
+
+    try {
+      val k = modSub(m1.hashValue, m2.hashValue) * modSub(m1.sig.s, m2.sig.s).modInverse(q) % q
+      Some(SubKey(k))
+    } catch {
+      case _: ArithmeticException => None
+    }
+  }
+
+  def findReusedK(messages: Seq[SignedMessage]): Option[KeyPair] = {
+    val messagesI = messages.zipWithIndex
+    messagesI.collectFirst(Function.unlift{case (m1, i1) =>
+      messagesI.collectFirst(Function.unlift{case (m2, i2) =>
+        if(i1 == i2)
+          None
+        else {
+          val subkey = findReusedSubkey(m1, m2)
+          subkey.flatMap{k =>
+            val a = inverseKey(m1.data, k, m1.sig)
+            val b = inverseKey(m2.data, k, m2.sig)
+            if(a == b)
+              Some(a)
+            else
+              None
+          }
+        }
+      })
+    })
+  }
 }
