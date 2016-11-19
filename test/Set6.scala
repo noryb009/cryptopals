@@ -83,4 +83,23 @@ class Set6 extends FunSpec {
     assert(key.y == y)
     assert(matchPrivKey(key, expHash))
   }
+
+  it("C45") {
+    val strings = Seq("Hello, world", "Goodbye, world")
+    val datas = strings.map(Utils.stringToBinary)
+
+    val key0 = DSA.genKeyPair(DSA.np, DSA.nq, 0)
+    val sig0 = DSA.zeroMagicSignature
+
+    datas.foreach{data =>
+      assert(key0.toPub.validate(data, sig0))
+    }
+
+    val key1 = DSA.genKeyPair(DSA.np, DSA.nq, DSA.np + 1)
+    val sig1 = DSA.oneMagicSignature(key1.toPub)
+
+    datas.foreach{data =>
+      assert(key1.toPub.validate(data, sig1))
+    }
+  }
 }

@@ -1,4 +1,3 @@
-import scala.annotation.tailrec
 import scala.util.Random
 
 object DSA {
@@ -57,25 +56,17 @@ object DSA {
     BigInt(1, hash.take(minPos).toArray)
   }
 
-  @tailrec
   def sign(data: Seq[Byte], kp: KeyPair, hash: Option[Seq[Byte]] = None, kkOpt: Option[SubKey] = None): (SubKey, Signature) = {
     val kk = kkOpt.getOrElse(genSubKey(kp.p, kp.q, kp.g))
     val hashVal = hash.getOrElse(Hash.sha1(data))
     val r = kp.g.modPow(kk.k, kp.p) % kp.q
-    if(r == 0)
-      sign(data, kp, Some(hashVal))
-    else {
-      val z = hashValue(hashVal, kp.q)
-      val s = (kk.kInv * (z + kp.x * r)) % kp.q
-      if(s == 0)
-        sign(data, kp, Some(hashVal))
-      else
-        (kk, Signature(r, s))
-    }
+    val z = hashValue(hashVal, kp.q)
+    val s = (kk.kInv * (z + kp.x * r)) % kp.q
+    (kk, Signature(r, s))
   }
 
   def validateSignature(data: Seq[Byte], pub: KeyPub, sig: Signature): Boolean = {
-    if(sig.r <= 0 || sig.r >= pub.q || sig.s <= 0 || sig.s >= pub.q)
+    if(sig.r < 0 || sig.r >= pub.q || sig.s < 0 || sig.s >= pub.q)
       false
     else {
       val w = sig.s.modInverse(pub.q)
@@ -154,5 +145,15 @@ object DSA {
         }
       })
     })
+  }
+
+  def zeroMagicSignature: Signature =
+    DSA.Signature(0, 1)
+
+  def oneMagicSignature(pub: KeyPub): Signature = {
+    val z = BigInt(pub.q.bitLength, Random) % (pub.q - 1) + 1
+    val r = pub.y.modPow(z, pub.p) % pub.q
+    val s = r * z.modInverse(pub.q) % pub.q
+    DSA.Signature(r, s)
   }
 }
