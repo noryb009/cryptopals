@@ -117,4 +117,13 @@ object RSA {
 
     tryRoot(baseVal)
   }
+
+  def messageRecoveryOracle(c: BigInt, pub: RSAPub, decryptor: BigInt => BigInt): String = {
+    val s = BigInt(pub.n.bitLength, Random) % (pub.n - 2) + 2
+    val cPrime = (s.modPow(pub.e, pub.n) * c) % pub.n
+    val pPrime = decryptor(cPrime)
+    val p = (pPrime * s.modInverse(pub.n)) % pub.n
+
+    Utils.binaryToString(p.toByteArray)
+  }
 }
