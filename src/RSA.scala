@@ -32,17 +32,17 @@ object RSA {
   }
 
   @tailrec
-  def getPrime(size: Int): BigInt = {
+  def getPrime(size: Int, not: Option[BigInt] = None): BigInt = {
     val p = BigInt.probablePrime(size, Random)
-    if(p % e == 1)
-      getPrime(size)
+    if(not.contains(p) || p % e == 1)
+      getPrime(size, not)
     else
       p
   }
 
   def genKeyPair(size: Int = 128): RSAKey = {
     val p = getPrime(size)
-    val q = getPrime(size)
+    val q = getPrime(size, Some(p))
     val n = p * q
     val et = (p - 1) * (q - 1)
     val e = 3
@@ -179,5 +179,29 @@ object RSA {
       val max = BigInt((start ++ end).toArray)
       eRootFloor(max)
     }
+  }
+
+  def isEven(data: BigInt, kp: RSAKey): Boolean =
+    decrypt(data, kp) % 2 == BigInt(0)
+
+  def isEvenAttack(enc: BigInt, pub: RSAPub, isEven: BigInt => Boolean): BigInt = {
+    val two = BigInt(2)
+    val rsaTwo = two.modPow(pub.e, pub.n)
+    @tailrec
+    def binSearch(enc: BigInt, min: BigInt, max: BigInt, mult: BigInt, incs: BigInt): BigInt = {
+      //println(max)
+      if(min >= max)
+        max
+      else {
+        val dbl = enc * rsaTwo
+        val pivot = pub.n * (incs + 1) / mult
+        if(isEven(dbl)) // no wrap
+          binSearch(dbl, min, pivot, mult * 2, incs * 2)
+        else // wrap around
+          binSearch(dbl, pivot + 1, max, mult * 2, incs * 2 + 2)
+      }
+    }
+
+    binSearch(enc, 0, pub.n - 1, 2, 0)
   }
 }

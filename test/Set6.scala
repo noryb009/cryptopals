@@ -102,4 +102,16 @@ class Set6 extends FunSpec {
       assert(key1.toPub.validate(data, sig1))
     }
   }
+
+  it("C46") {
+    val text = "VGhhdCdzIHdoeSBJIGZvdW5kIHlvdSBkb24ndCBwbGF5IGFyb3VuZCB3aXRoIHRoZSBGdW5reSBDb2xkIE1lZGluYQ=="
+    val textVal = BigInt(1, Base64.decode(text).toArray)
+
+    //val kp = RSA.genKeyPair(1024)
+    val kp = RSA.genKeyPair(512) // Have tests run faster
+    val enc = RSA.encrypt(textVal, kp)
+    val isEven = RSA.isEven(_: BigInt, kp)
+    val dec = RSA.isEvenAttack(enc, RSA.RSAPub(kp), isEven)
+    assert(dec == textVal)
+  }
 }
