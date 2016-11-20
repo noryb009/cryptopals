@@ -1,32 +1,37 @@
 import scala.annotation.tailrec
 
 object KeyVal {
+  case class Pair(k: String, v: String)
+
+  case class Pairs(pairs: Seq[Pair]) {
+    def apply(key: String): Option[String] =
+      pairs.collectFirst{case Pair(k, v) if k == key => v}
+
+    def mkString(splitter: String = "&"): String =
+      pairs.map{case Pair(a, b) => clean(a) + "=" + clean(b)}.mkString(splitter)
+  }
+
   def clean(str: String, toClean: Seq[String] = Seq("=", "&")): String =
     toClean.foldLeft(str)(_.replaceAll(_, ""))
 
-  def apply(str: String, splitter: String = "&"): Seq[(String, String)] =
-    str.split(splitter).map(_.split("=", 2) match {
-      case Array(k)    => (k, "")
-      case Array(k, v) => (k, v)
-    })
+  def apply(str: String, splitter: String = "&"): Pairs =
+    Pairs(str.split(splitter).map(_.split("=", 2) match {
+      case Array(k)    => Pair(k, "")
+      case Array(k, v) => Pair(k, v)
+    }))
 
-  def apply(data: Seq[(String, String)], splitter: String): String =
-    data.map{case (a, b) => clean(a) + "=" + clean(b)}.mkString(splitter)
-
-  def apply(data: Seq[(String, String)]): String =
-    apply(data, "&")
-
-  def profileFor(email: String): String = {
-    KeyVal(Seq(("email", email), ("uid", "10"), ("role", "user")))
-  }
+  def profileFor(email: String): String =
+    Pairs(Seq(Pair("email", email), Pair("uid", "10"), Pair("role", "user"))).mkString()
 
   def encryptProfileGen(email: String, key: String): Seq[Byte] =
     AES.encrypt(AES.padPKCS7(Utils.stringToBinary(profileFor(email))), key)
 
-  def isAdmin(data: Seq[Byte], key: String): Boolean =
+  def isAdmin(data: Seq[Byte], key: String, value: String, splitter: String = "&"): Boolean =
+    KeyVal(Utils.binaryToString(data), splitter)(key).contains(value)
+
+  def isAdminAnd(data: Seq[Byte], key: String): Boolean =
     AES.unpadPKCS7(AES.decrypt(data, key)) match {
-      case Some(x) =>
-        KeyVal(Utils.binaryToString(x)).exists{case (k, v) => k == "role" && v == "admin"}
+      case Some(x) => isAdmin(x, "role", "admin")
       case None => false
     }
 
@@ -49,7 +54,7 @@ object KeyVal {
     val key = AES.randomString(16)
     val encryptor = (email: String) => encryptProfileGen(email, key)
     val enc = makeAdmin(encryptor)
-    isAdmin(enc, key)
+    isAdminAnd(enc, key)
   }
 
   val c1: String = "comment1=cooking" + "%20MCs;userdata="
@@ -86,16 +91,14 @@ object KeyVal {
   }
   def isAdminSemi(data: Seq[Byte], key: String): Boolean = {
     AES.unpadPKCS7(AES.decryptCBC(data, key)) match {
-      case Some(x) =>
-        KeyVal(Utils.binaryToString(x), ";").exists{case (k, v) => k == "admin" && v == "true"}
+      case Some(x) => isAdmin(x, "admin", "true", ";")
       case None => false
     }
   }
 
-  def isAdminSemiCTR(data: Seq[Byte], key: AES.KeyStream): Boolean = {
-    KeyVal(Utils.binaryToString(AES.decryptCTR(data, key)), ";")
-      .exists{case (k, v) => k == "admin" && v == "true"}
-  }
+  def isAdminSemiCTR(data: Seq[Byte], key: AES.KeyStream): Boolean =
+    isAdmin(AES.decryptCTR(data, key), "admin", "true", ";")
+
   def checkMakeAdminSemi: Boolean = {
     val key = AES.randomString(16)
     val encryptor = (userdata: String) => encryptComments(clean(userdata, Seq(";", "=")), key)
