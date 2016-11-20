@@ -113,4 +113,28 @@ class Set6 extends FunSpec {
     val dec = RSA.isEvenAttack(enc, kp.toPub, isEven)
     assert(dec == textVal)
   }
+
+  def runRSAPaddingOracle(k: Int) = {
+    val kp = RSA.genKeyPair(k/2)
+    val maxTextLen = k/8 - 3
+    val text = AES.randomString(Random.nextInt(maxTextLen + 1))
+    val m = RSA.padPKCS1(Utils.stringToBinary(text).toArray, k)
+    assert(RSA.unpadPKCS1(m, k) == Utils.stringToBinary(text))
+    val oracle = RSAPaddingOracle.checkPaddingOracle(kp, k)_
+    val c = kp.toPub.encrypt(m)
+    assert(oracle(c))
+
+    val m2Padded = RSAPaddingOracle(oracle, c, kp.toPub, k)
+    val m2 = RSA.unpadPKCS1(m2Padded, k)
+    assert(text == Utils.binaryToString(m2))
+  }
+
+  // Skip C47 and C48 since they can take quite a while
+  ignore("C47") {
+    runRSAPaddingOracle(256)
+  }
+
+  ignore("C48") {
+    runRSAPaddingOracle(768)
+  }
 }

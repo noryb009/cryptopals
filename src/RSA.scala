@@ -207,4 +207,25 @@ object RSA {
 
     binSearch(enc, 0, pub.n - 1, 2, 0)
   }
+
+  @tailrec
+  def randomNonZeroBytes(len: Int, acc: Seq[Byte] = Seq()): Seq[Byte] = {
+    if(len == 0)
+      acc
+    else
+      randomNonZeroBytes(len-1, (Random.nextInt(255) + 1).toByte +: acc)
+  }
+
+  def padPKCS1(data: Seq[Byte], k: Int): BigInt = {
+    val paddedData = Seq[Byte](0x00, 0x02) ++ randomNonZeroBytes(k/8 - 3 - data.length) ++ (0x00.toByte +: data)
+    BigInt(1, paddedData.toArray)
+  }
+
+  def unpadPKCS1(n: BigInt, k: Int): Seq[Byte] = {
+    val dataRight = n.toByteArray
+    val data = Seq.fill[Byte](k/8 - dataRight.length)(0) ++ dataRight
+
+    val start = data.splitAt(2)._2.indexOf(0)
+    data.slice(start + 2 + 1, data.length)
+  }
 }
