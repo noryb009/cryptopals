@@ -39,16 +39,16 @@ class Set5 extends FunSpec {
   it("C39") {
     val data = Utils.stringToBinary(AES.randomString(16)) // Binary must start with 0 bit to be positive
     val kp = RSA.genKeyPair()
-    val enc = RSA.encrypt(data, kp)
-    val dec = RSA.decrypt(enc, kp).toByteArray.toSeq
+    val enc = kp.toPub.encrypt(data)
+    val dec = kp.decrypt(enc).toByteArray.toSeq
     assert(dec == data)
   }
 
   it("C40") {
     val data = BigInt(128, Random)
     val encryptor = () => {
-      val kp = RSA.genKeyPair() // TODO
-      (RSA.RSAPub(kp), RSA.encrypt(data, kp))
+      val kp = RSA.genKeyPair()
+      (kp.toPub, kp.toPub.encrypt(data))
     }
     val a = RSA.broadcastAttack(encryptor)
     assert(a.get == data)

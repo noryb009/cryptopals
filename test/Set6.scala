@@ -6,10 +6,10 @@ class Set6 extends FunSpec {
   it("C41") {
     val data = AES.randomString(16)
     val kp = RSA.genKeyPair()
-    val enc = RSA.encrypt(Utils.stringToBinary(data), kp)
-    val decryptor = (n: BigInt) => if(n == enc) BigInt(0) else RSA.decrypt(n, kp)
+    val enc = kp.toPub.encrypt(Utils.stringToBinary(data))
+    val decryptor = (n: BigInt) => if(n == enc) BigInt(0) else kp.decrypt(n)
 
-    val dec = RSA.messageRecoveryOracle(enc, RSA.RSAPub(kp), decryptor)
+    val dec = RSA.messageRecoveryOracle(enc, kp.toPub, decryptor)
     assert(data == dec)
   }
 
@@ -18,13 +18,13 @@ class Set6 extends FunSpec {
     val str = "hi mom"
     val data = Utils.stringToBinary(str)
     val signature = RSA.Sign.padAndSign(data, kp)
-    assert(RSA.Sign.validateSignature(data, signature, RSA.RSAPub(kp)))
+    assert(RSA.Sign.validateSignature(data, signature, kp.toPub))
 
     val (dataA, dataB) = data.splitAt(data.length - 1)
-    assert(!RSA.Sign.validateSignature(dataA :+ (dataB.head ^ 1).toByte, signature, RSA.RSAPub(kp)))
+    assert(!RSA.Sign.validateSignature(dataA :+ (dataB.head ^ 1).toByte, signature, kp.toPub))
 
-    val forgedSignature = RSA.Sign.forgeSignature(data, RSA.RSAPub(kp))
-    assert(RSA.Sign.validateSignature(data, forgedSignature, RSA.RSAPub(kp)))
+    val forgedSignature = RSA.Sign.forgeSignature(data, kp.toPub)
+    assert(RSA.Sign.validateSignature(data, forgedSignature, kp.toPub))
   }
 
   def matchPrivKey(key: DSA.KeyPair, expHash: String): Boolean =
@@ -107,11 +107,10 @@ class Set6 extends FunSpec {
     val text = "VGhhdCdzIHdoeSBJIGZvdW5kIHlvdSBkb24ndCBwbGF5IGFyb3VuZCB3aXRoIHRoZSBGdW5reSBDb2xkIE1lZGluYQ=="
     val textVal = BigInt(1, Base64.decode(text).toArray)
 
-    //val kp = RSA.genKeyPair(1024)
-    val kp = RSA.genKeyPair(512) // Have tests run faster
-    val enc = RSA.encrypt(textVal, kp)
+    val kp = RSA.genKeyPair(512)
+    val enc = kp.toPub.encrypt(textVal)
     val isEven = RSA.isEven(_: BigInt, kp)
-    val dec = RSA.isEvenAttack(enc, RSA.RSAPub(kp), isEven)
+    val dec = RSA.isEvenAttack(enc, kp.toPub, isEven)
     assert(dec == textVal)
   }
 }

@@ -2,10 +2,19 @@ import scala.annotation.tailrec
 import scala.util.Random
 
 object RSA {
-  case class RSAKey(e: BigInt, d: BigInt, n: BigInt)
-  case class RSAPub(k: RSAKey) {
-    val e = k.e
-    val n = k.n
+  case class RSAKey(e: BigInt, d: BigInt, n: BigInt) {
+    def decrypt(data: BigInt): BigInt =
+      RSA.decrypt(data, this)
+
+    def toPub: RSAPub =
+      RSAPub(e, n)
+  }
+  case class RSAPub(e: BigInt, n: BigInt) {
+    def encrypt(data: Seq[Byte]): BigInt =
+      RSA.encrypt(data, this)
+
+    def encrypt(data: BigInt): BigInt =
+      RSA.encrypt(data, this)
   }
 
   val e = BigInt(3)
@@ -54,14 +63,8 @@ object RSA {
   def encrypt(data: BigInt, key: RSAPub): BigInt =
     data.modPow(key.e, key.n)
 
-  def encrypt(data: BigInt, key: RSAKey): BigInt =
-    encrypt(data, RSAPub(key))
-
   def encrypt(data: Seq[Byte], key: RSAPub): BigInt =
     encrypt(BigInt(data.toArray), key)
-
-  def encrypt(data: Seq[Byte], key: RSAKey): BigInt =
-    encrypt(BigInt(data.toArray), RSAPub(key))
 
   def decrypt(data: BigInt, key: RSAKey): BigInt =
     data.modPow(key.d, key.n)
@@ -148,11 +151,11 @@ object RSA {
     def padAndSign(data: Seq[Byte], kp: RSAKey): BigInt = {
       val hash = Hash.md4(data)
       val dec = (Seq(0x0, 0x1) ++ Seq.fill(explen - 2 - hashlen - 1 - asn1MD4.length)(0xff) ++ Seq(0x00) ++ asn1MD4).map(_.toByte) ++ hash
-      decrypt(BigInt(dec.toArray), kp)
+      kp.decrypt(BigInt(dec.toArray))
     }
 
     def validateSignature(data: Seq[Byte], signature: BigInt, pub: RSAPub): Boolean = {
-      val decWrongSize = encrypt(signature, pub).toByteArray
+      val decWrongSize = pub.encrypt(signature).toByteArray
       val dec = Seq.fill[Byte](explen - decWrongSize.length)(0) ++ decWrongSize
 
       // EB = 00 || BT (01) || PS (FF * (k-3-|D|)) || 00 || D
@@ -182,7 +185,7 @@ object RSA {
   }
 
   def isEven(data: BigInt, kp: RSAKey): Boolean =
-    decrypt(data, kp) % 2 == BigInt(0)
+    kp.decrypt(data) % 2 == BigInt(0)
 
   def isEvenAttack(enc: BigInt, pub: RSAPub, isEven: BigInt => Boolean): BigInt = {
     val two = BigInt(2)
