@@ -1,3 +1,6 @@
+import scala.annotation.tailrec
+import scala.util.Random
+
 object CBCMAC {
   def apply(data: Seq[Byte], key: String, iv: Option[Seq[Byte]] = None): Seq[Byte] =
     AES.encryptCBC(AES.padPKCS7(data), key, iv).takeRight(16)
@@ -90,5 +93,23 @@ object CBCMAC {
       val gMod = XOR.xor(gStart, capMac.toIndexedSeq) ++ gEnd
       c ++ gMod ++ gMac
     }
+  }
+
+  def fakeHash(oldCode: String, newCode: String, key: String): Seq[Byte] = {
+    val oldBytes = Utils.stringToBinary(oldCode)
+    val newPadded = Utils.stringToBinary(newCode ++ ("a" * (16 - (newCode.length % 16))))
+    val newHash = AES.encryptCBC(newPadded, key).takeRight(16)
+
+    @tailrec
+    def getRandom: Seq[Byte] = {
+      val random = Random.alphanumeric.take(16).map(_.toByte)
+      val oldXor = XOR.xor(AES.encryptCBC(random, key, Some(newHash)), oldBytes.take(16).toIndexedSeq)
+
+      if(oldXor.intersect(Seq('\n', '\r', 0)).isEmpty)
+        random ++ oldXor
+      else
+        getRandom
+    }
+    newPadded ++ getRandom ++ oldBytes.drop(16)
   }
 }

@@ -34,4 +34,20 @@ class Set7 extends FunSpec {
     assert(params("from").contains(victim.toString))
     assert(params("tx_list").get.split(";").contains(attacker.toString + ":1000000"))
   }
+
+  it("C50") {
+    val input = "alert('MZA who was that?');\n"
+    val output = "alert('Ayo, the Wu is back!');//"
+    val key = "YELLOW SUBMARINE"
+    val hash = CBCMAC(Utils.stringToBinary(input), key, None)
+    assert(Hex.encode(hash) == "296b8d7cb78a243dda4d0a61d33bbdd1")
+
+    val fake = CBCMAC.fakeHash(input, output, key)
+    assert(CBCMAC(fake, key, None) == hash)
+    assert(fake.startsWith(output))
+    assert(!fake.dropRight(1).contains('\n'.toByte))
+    assert(!fake.contains('\r'.toByte))
+
+    //println(Utils.binaryToString(fake))
+  }
 }
