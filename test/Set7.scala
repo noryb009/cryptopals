@@ -50,4 +50,17 @@ class Set7 extends FunSpec {
 
     //println(Utils.binaryToString(fake))
   }
+
+  it("C51") {
+    val sessionID = Base64.encode(AES.randomBytes(32))
+    //val sessionID = "TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE="
+    val oracle = Crime.oracle(sessionID)_
+    val oracleCBC = Crime.oracleCBC(sessionID)_
+    val assertCorrect = (cur: String) => assert(sessionID.startsWith(cur))
+
+    val result = Crime.attack(oracle, assertCorrect)
+    assert(result == sessionID)
+    val resultCBC = Crime.attack(oracleCBC, assertCorrect)
+    assert(resultCBC == sessionID)
+  }
 }
