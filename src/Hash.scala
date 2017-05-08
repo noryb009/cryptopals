@@ -193,4 +193,90 @@ object Hash {
     val padding = md4Padding(origSize + sha1Padding(origSize).length + suffix.length)
     md4FromQ(suffix ++ padding, Q)
   }
+
+  object Collision {
+    case class HashInfo(key: String, h: Seq[Byte])
+    val hi1 = HashInfo("YELLOW SUBMARINE", Seq[Byte](4, 4))
+    val hi2 = HashInfo("SUBMARINE YELLOW", Seq[Byte](5, 5))
+
+    // Padding is easy to deal with, as every input is a length divisible by the padding length.
+    // This lets us generate strings that collide, then add the same padding to each, keeping the
+    // colliding property.
+    def badMDNoPad(data: Seq[Byte], init: Seq[Byte], key: String): Seq[Byte] =
+      data
+        .grouped(init.length)
+        .foldLeft(init){(h, cur) => AES.encrypt(AES.padPKCS7(h ++ cur), key).take(h.length)}
+    def badMDNoPad(data: Seq[Byte], hi: HashInfo): Seq[Byte] =
+      badMDNoPad(data, hi.h, hi.key)
+    def badMD(data: Seq[Byte], init: Seq[Byte], key: String): Seq[Byte] =
+      badMDNoPad(AES.padPKCS7(data, init.length), init, key)
+    def badMD(data: Seq[Byte], hi: HashInfo): Seq[Byte] =
+      badMD(data, hi.h, hi.key)
+
+    def collideSingle(h: Seq[Byte], key: String): Option[(Seq[Byte], Seq[Byte])] = {
+      @tailrec
+      def loop(cur: Seq[Byte], found: Map[Seq[Byte], Seq[Byte]]): Option[(Seq[Byte], Seq[Byte])] = {
+        val h2 = badMDNoPad(cur, h, key)
+        found.get(h2) match {
+          case Some(c2) => Some(cur, c2)
+          case None =>
+            val (overflow, inc) = cur.foldRight(1, Seq[Byte]()){case (c, (overflow, inc)) =>
+              val v = c.toInt + overflow
+              ((v / Byte.MaxValue).toByte, v.toByte +: inc)
+            }
+            if(overflow == 1) None
+            else loop(inc, found + (h2 -> cur))
+        }
+      }
+      loop(Seq.fill[Byte](h.length)(0), Map())
+    }
+
+    type CollisionStream = Stream[(Int, Seq[Byte])]
+    def genCollisions(hi: HashInfo): CollisionStream = {
+      def loop(prefixes: Seq[(Seq[Byte], Seq[Byte])]): CollisionStream = {
+        def getPrefix(n: BigInt) = {
+          prefixes.zipWithIndex.foldRight(Seq[Byte]()){case ((pair, i), prefix) =>
+            (if(n.testBit(i)) pair._1 else pair._2) ++ prefix
+          }
+        }
+
+        val maxN = BigInt(2).pow(prefixes.length)
+        def innerLoop(n: BigInt): CollisionStream = {
+          if(n == maxN) {
+            collideSingle(badMDNoPad(getPrefix(0), hi), hi.key) match {
+              case Some(pair) => loop(prefixes :+ pair)
+              case None => Stream.empty
+            }
+          } else {
+            (prefixes.length, getPrefix(n)) #:: innerLoop(n + 1)
+          }
+        }
+
+        innerLoop(0)
+      }
+
+      loop(Seq())
+    }
+
+    def doubleCollision: Option[(Seq[Byte], Seq[Byte])] = {
+      @tailrec
+      def loop(n: Int, s: CollisionStream, found: Map[Seq[Byte], Seq[Byte]]): Option[(Seq[Byte], Seq[Byte])] = {
+        s match {
+          case Stream.Empty => None
+          case (n2, _) #:: _ if n != n2 => loop(n2, s, Map())
+          case (_, p) #:: s2 =>
+            val hash = badMDNoPad(p, hi2)
+            found.get(hash) match {
+              case Some(p2) => Some((p, p2))
+              case None => loop(n, s2, found + (hash -> p))
+            }
+        }
+      }
+
+      loop(0, genCollisions(hi1), Map())
+    }
+
+    def doubleHash(h: Seq[Byte]): Seq[Byte] =
+      badMD(h, hi1) ++ badMD(h, hi2)
+  }
 }

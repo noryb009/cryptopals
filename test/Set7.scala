@@ -63,4 +63,10 @@ class Set7 extends FunSpec {
     val resultCBC = Crime.attack(oracleCBC, assertCorrect)
     assert(resultCBC == sessionID)
   }
+
+  it("C52") {
+    val (h1, h2) = Hash.Collision.doubleCollision.get
+    assert(h1 != h2)
+    assert(Hash.Collision.doubleHash(h1) == Hash.Collision.doubleHash(h2))
+  }
 }
