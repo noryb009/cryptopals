@@ -69,4 +69,14 @@ class Set7 extends FunSpec {
     assert(h1 != h2)
     assert(Hash.Collision.doubleHash(h1) == Hash.Collision.doubleHash(h2))
   }
+
+  it("C53") {
+    val k = 8
+    val M = AES.randomBytes(Math.pow(2, k).toInt)
+    val hi = Hash.Collision.hi1
+    val M2 = Hash.Collision.expandable(M, hi).get
+    assert(M != M2)
+    assert(M.length == M2.length)
+    assert(Hash.Collision.badMD(M, hi) == Hash.Collision.badMD(M2, hi))
+  }
 }

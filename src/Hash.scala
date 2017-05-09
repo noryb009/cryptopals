@@ -199,6 +199,15 @@ object Hash {
     val hi1 = HashInfo("YELLOW SUBMARINE", Seq[Byte](4, 4))
     val hi2 = HashInfo("SUBMARINE YELLOW", Seq[Byte](5, 5))
 
+    def incSeq(cur: Seq[Byte]): Option[Seq[Byte]] = {
+      val (overflowOuter, incOuter) = cur.foldRight(1, Seq[Byte]()){case (c, (overflow, inc)) =>
+        val v = c.toInt + overflow
+        ((v / Byte.MaxValue).toByte, v.toByte +: inc)
+      }
+      if(overflowOuter == 1) None
+      else Some(incOuter)
+    }
+
     // Padding is easy to deal with, as every input is a length divisible by the padding length.
     // This lets us generate strings that collide, then add the same padding to each, keeping the
     // colliding property.
@@ -220,12 +229,10 @@ object Hash {
         found.get(h2) match {
           case Some(c2) => Some(cur, c2)
           case None =>
-            val (overflow, inc) = cur.foldRight(1, Seq[Byte]()){case (c, (overflow, inc)) =>
-              val v = c.toInt + overflow
-              ((v / Byte.MaxValue).toByte, v.toByte +: inc)
+            incSeq(cur) match {
+              case None => None
+              case Some(inc) => loop(inc, found + (h2 -> cur))
             }
-            if(overflow == 1) None
-            else loop(inc, found + (h2 -> cur))
         }
       }
       loop(Seq.fill[Byte](h.length)(0), Map())
@@ -278,5 +285,92 @@ object Hash {
 
     def doubleHash(h: Seq[Byte]): Seq[Byte] =
       badMD(h, hi1) ++ badMD(h, hi2)
+
+    def collideDiffInit(h: (Seq[Byte], Seq[Byte]), key: String): Option[(Seq[Byte], Seq[Byte])] = {
+      @tailrec
+      def loop(cur: Seq[Byte], found: (Map[Seq[Byte], Seq[Byte]], Map[Seq[Byte], Seq[Byte]])): Option[(Seq[Byte], Seq[Byte])] = {
+        val next1 = badMDNoPad(cur, h._1, key)
+        val next2 = badMDNoPad(cur, h._2, key)
+        (found._1.get(next2), found._2.get(next1)) match {
+          case (Some(c), _) => Some(c, cur)
+          case (_, Some(c)) => Some(cur, c)
+          case _ =>
+            incSeq(cur) match {
+              case None => None
+              case Some(inc) => loop(inc, (found._1 + (next1 -> cur), found._2 + (next2 -> cur)))
+            }
+        }
+      }
+      loop(Seq.fill[Byte](h._1.length)(0), (Map(), Map()))
+    }
+
+    @tailrec
+    def genExpandable(k: Int, h: Seq[Byte], key: String, acc: Seq[(Seq[Byte], Seq[Byte])] = Seq()): Option[(Seq[(Seq[Byte], Seq[Byte])], Seq[Byte])] = {
+      val prefix = AES.randomBytes(Math.pow(2, k-1).toInt * h.length)
+      val prefixH = badMDNoPad(prefix, h, key)
+
+      collideDiffInit((h, prefixH), key) match {
+        case Some((a, b)) =>
+          val newAcc = (a, prefix ++ b) +: acc
+          val h2 = badMDNoPad(a, h, key)
+          if(k == 1) Some((newAcc, h2))
+          else genExpandable(k-1, h2, key, newAcc)
+        case None => None
+      }
+    }
+
+    def subhashM(M: Seq[Byte], h: Seq[Byte], key: String): Map[Seq[Byte], Int] = {
+      @tailrec
+      def loop(M: Seq[Byte], h: Seq[Byte], i: Int, map: Map[Seq[Byte], Int] = Map()): Map[Seq[Byte], Int] = {
+        M.splitAt(h.length) match {
+          case (Seq(), _) => map
+          case (head, tail) =>
+            val h2 = badMDNoPad(head, h, key)
+            // Note: previous state is added to map
+            loop(tail, h2, i + h.length, map + (h -> i))
+        }
+      }
+
+      val split = (log2(M.length) + 1) * h.length
+      val (prefix, rest) = M.splitAt(split)
+      loop(rest, badMDNoPad(prefix, h, key), split)
+    }
+
+    @tailrec
+    def log2(i: Int, acc: Int = 0): Int = {
+      if(i > 1) log2(i >>> 1, acc + 1)
+      else acc
+    }
+
+    def expandable(M: Seq[Byte], hi: HashInfo = hi1): Option[Seq[Byte]] = {
+      val k = log2(M.length)
+      val subhash = subhashM(M, hi.h, hi.key)
+      genExpandable(k, hi.h, hi.key) match {
+        case None => None
+        case Some((exp, hExp)) =>
+          @tailrec
+          def findBridge(b: Seq[Byte] = Seq.fill[Byte](hi.h.length)(0)): Option[(Seq[Byte], Int)] = {
+            val h = badMDNoPad(b, hExp, hi.key)
+            subhash.get(h) match {
+              case None =>
+                incSeq(b) match {
+                  case None => None
+                  case Some(x) => findBridge(x)
+                }
+              case Some(i) => Some((b, i))
+            }
+          }
+
+          findBridge() match {
+            case None => None
+            case Some((b, i)) =>
+              val expExtraLen = i / hi.h.length - k - 1
+              val (start, _) = exp.foldLeft((Seq[Byte](), expExtraLen)){case ((acc, len), (short, long)) =>
+                ((if(len % 2 == 0) short else long) ++ acc, len >>> 1)
+              }
+              Some(start ++ b ++ M.drop(i))
+          }
+      }
+    }
   }
 }
