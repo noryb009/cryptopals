@@ -195,7 +195,9 @@ object Hash {
   }
 
   object Collision {
-    case class HashInfo(key: String, h: Seq[Byte])
+    case class HashInfo(key: String, h: Seq[Byte]) {
+      val blockLen = h.length
+    }
     val hi1 = HashInfo("YELLOW SUBMARINE", Seq[Byte](4, 4))
     val hi2 = HashInfo("SUBMARINE YELLOW", Seq[Byte](5, 5))
 
@@ -370,6 +372,80 @@ object Hash {
               }
               Some(start ++ b ++ M.drop(i))
           }
+      }
+    }
+
+    case class PredictNode(blockL: Seq[Byte], blockR: Seq[Byte], h: Seq[Byte])
+    case class PredictInfo(predicts: IndexedSeq[PredictNode]) {
+      val map = predicts.take((predicts.length+1)/2).zipWithIndex.foldLeft(Map[Seq[Byte], Int]()){case (m, (p, i)) => m + (p.h -> i)}
+    }
+
+    val GLUE_LENGTH = 4
+
+    def predictPart1(k: Int, len: Int, hi: HashInfo): Option[(Seq[Byte], Int, PredictInfo)] = {
+      val initVals = IndexedSeq.tabulate(Math.pow(2, k).toInt){_ => PredictNode(Seq(), Seq(), AES.randomBytes(hi.blockLen).toIndexedSeq)}
+
+      // TODO: @tailrec
+      def loop(vals: IndexedSeq[PredictNode], k: Int): Option[IndexedSeq[PredictNode]] = {
+        if(k == -1)
+          Some(vals)
+        else {
+          val offset = vals.length - Math.pow(2, k + 1).toInt
+          val next = IndexedSeq.tabulate(Math.pow(2, k).toInt){n =>
+            val a = vals(offset + n * 2)
+            val b = vals(offset + n * 2 + 1)
+            collideDiffInit((a.h, b.h), hi.key) match {
+              case None => return None
+              case Some((x, y)) =>
+                val h = badMDNoPad(x, a.h, hi.key)
+                PredictNode(x, y, h)
+            }
+          }
+          loop(vals ++ next, k - 1)
+        }
+      }
+
+      loop(initVals, k - 1) match {
+        case None => None
+        case Some(predicts) => Some((badMD(Seq(), predicts.last.h, hi.key), len + (GLUE_LENGTH + k) * hi.blockLen, PredictInfo(predicts)))
+      }
+    }
+
+    def predictPart2(m: Seq[Byte], info: PredictInfo, hi: HashInfo): Option[Seq[Byte]] = {
+      val h = badMDNoPad(m, hi)
+
+      @tailrec
+      def getGlue(b: Seq[Byte] = Seq.fill[Byte](GLUE_LENGTH * hi.blockLen)(0)): Option[(Seq[Byte], Int)] = {
+        info.map.get(badMDNoPad(b, h, hi.key)) match {
+          case None => incSeq(b) match {
+            case None => None
+            case Some(b2) => getGlue(b2)
+          }
+          case Some(i) => Some((b, i))
+        }
+      }
+
+      def getSuffix(i: Int, predicts: IndexedSeq[PredictNode] = info.predicts): Seq[Byte] = {
+        @tailrec
+        def loop(i: Int, predicts: IndexedSeq[PredictNode] = info.predicts, acc: Seq[Byte] = Seq()): Seq[Byte] = {
+          if(predicts.isEmpty)
+            acc
+          else {
+            val p = predicts(i / 2)
+            val block = if(i % 2 == 0) p.blockL else p.blockR
+            val newPredicts = predicts.drop((predicts.length+1)/2)
+            val newI = i / 2
+            loop(newI, newPredicts, acc ++ block)
+          }
+        }
+        loop(i, predicts.drop((predicts.length+1)/2))
+      }
+
+      getGlue() match {
+        case None => None
+        case Some((glue, i)) =>
+          val suffix = getSuffix(i)
+          Some(m ++ glue ++ suffix)
       }
     }
   }
