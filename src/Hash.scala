@@ -101,7 +101,14 @@ object Hash {
     sha1FromH(suffix ++ padding, h)
   }
 
-  def md4CalcChunk(chunk: Seq[Byte], Q: Seq[Int]): Seq[Int] = {
+  object MD4 {
+    val Q = Seq(
+      0x67452301,
+      0xefcdab89,
+      0x98badcfe,
+      0x10325476
+    )
+
     val k = Seq(
       0x00000000,
       0x5a827999,
@@ -123,61 +130,59 @@ object Hash {
     def G(a: Int, b: Int, c: Int): Int = (a & b) | (a & c) | (b & c)
     def H(a: Int, b: Int, c: Int): Int = a ^ b ^ c
 
-    val X = chunk
-      .grouped(4)
-      .map(x => bitsToInt(x.reverse))
-      .toIndexedSeq
+    def md4CalcChunk(chunk: Seq[Byte], Q: Seq[Int]): Seq[Int] = {
+      val X = chunk
+        .grouped(4)
+        .map(x => bitsToInt(x.reverse))
+        .toIndexedSeq
 
-    val letters1 = (0 until 16).foldLeft(Q){case (q, i) => {
-      Seq(
-        q(d),
-        rotl(q(a) + F(q(b), q(c), q(d)) + X(i) + k.head, shift.head(i % 4)),
-        q(b),
-        q(c)
-      )
-    }}
+      val letters1 = (0 until 16).foldLeft(Q){case (q, i) => {
+        Seq(
+          q(d),
+          rotl(q(a) + F(q(b), q(c), q(d)) + X(i) + k.head, shift.head(i % 4)),
+          q(b),
+          q(c)
+        )
+      }}
 
-    val xInd2 = IndexedSeq(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15)
-    val letters2 = (0 until 16).foldLeft(letters1){case (q, i) =>
-      Seq(
-        q(d),
-        rotl(q(a) + G(q(b), q(c), q(d)) + X(xInd2(i)) + k(1), shift(1)(i % 4)),
-        q(b),
-        q(c)
-      )
+      val xInd2 = IndexedSeq(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15)
+      val letters2 = (0 until 16).foldLeft(letters1){case (q, i) =>
+        Seq(
+          q(d),
+          rotl(q(a) + G(q(b), q(c), q(d)) + X(xInd2(i)) + k(1), shift(1)(i % 4)),
+          q(b),
+          q(c)
+        )
+      }
+
+      val xInd3 = IndexedSeq(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)
+      val letters3 = (0 until 16).foldLeft(letters2){case (q, i) =>
+
+        Seq(
+          q(d),
+          rotl(q(a) + H(q(b), q(c), q(d)) + X(xInd3(i)) + k(2), shift(2)(i % 4)),
+          q(b),
+          q(c)
+        )
+      }
+
+      Q.zip(letters3).map{case (x, y) => x + y}
     }
 
-    val xInd3 = IndexedSeq(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)
-    val letters3 = (0 until 16).foldLeft(letters2){case (q, i) =>
+    def md4FromQ(data: Seq[Byte], Q: Seq[Int]): Seq[Byte] =
+      data
+        .grouped(64)
+        .foldLeft(Q){case (qVal, chunk) => md4CalcChunk(chunk, qVal)}
+        .flatMap(x => intTo32Bit(x).reverse)
 
-      Seq(
-        q(d),
-        rotl(q(a) + H(q(b), q(c), q(d)) + X(xInd3(i)) + k(2), shift(2)(i % 4)),
-        q(b),
-        q(c)
-      )
+    def md4(data: Seq[Byte]): Seq[Byte] = {
+      val padding = md4Padding(data.length)
+      md4FromQ(data ++ padding, MD4.Q)
     }
-
-    Q.zip(letters3).map{case (x, y) => x + y}
   }
 
-  def md4FromQ(data: Seq[Byte], Q: Seq[Int]): Seq[Byte] =
-    data
-      .grouped(64)
-      .foldLeft(Q){case (qVal, chunk) => md4CalcChunk(chunk, qVal)}
-      .flatMap(x => intTo32Bit(x).reverse)
-
-  def md4(data: Seq[Byte]): Seq[Byte] = {
-    val Q = Seq(
-      0x67452301,
-      0xefcdab89,
-      0x98badcfe,
-      0x10325476
-    )
-
-    val padding = md4Padding(data.length)
-    md4FromQ(data ++ padding, Q)
-  }
+  val md4FromQ = MD4.md4FromQ _
+  val md4 = MD4.md4 _
 
   def md4HMAC(message: Seq[Byte], key: String): Seq[Byte] =
     md4(Utils.stringToBinary(key) ++ message)
