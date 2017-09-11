@@ -91,4 +91,22 @@ class Set7 extends FunSpec {
     assert(Hash.Collision.badMD(m2, hi) == h)
     assert(m2.length == m2Len)
   }
+
+  // This is super slow (>10 minutes), and there's a small chance it fails.
+  ignore("C56") {
+    val cookie = "QkUgU1VSRSBUTyBEUklOSyBZT1VSIE9WQUxUSU5F"
+    val data = Base64.decode(cookie)
+    val oracle = RC4.encryptOracle(data) _
+    val result = RC4.byteBias(oracle)
+
+    assert(result.length == data.length)
+
+    // Adding more iterations could improve the accuracy (to ~100%), but that would take a long time.
+    // Currently, ~2/3 of the characters are correctly guessed.
+    val correct = result.zip(data).count{case (a, b) => a == b}
+    val incorrect = result.length - correct
+    assert(correct >= incorrect)
+    println(Utils.binaryToString(data))
+    println(Utils.binaryToString(result))
+  }
 }
