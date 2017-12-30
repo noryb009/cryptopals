@@ -92,6 +92,18 @@ class Set7 extends FunSpec {
     assert(m2.length == m2Len)
   }
 
+  it("C55") {
+    val k = Hash.MD4.md4(Utils.stringToBinary("a")) // TODO: remove
+    val v = (0 to 100000).collectFirst(Function.unlift(_ => Hash.MD4.collideMD4))
+
+    // There's a chance this will be asserted.
+    assert(v.isDefined)
+
+    val (m, mPrime) = v.get
+    assert(m != mPrime)
+    assert(Hash.md4(m) == Hash.md4(mPrime))
+  }
+
   // This is super slow (>10 minutes), and there's a small chance it fails.
   ignore("C56") {
     val cookie = "QkUgU1VSRSBUTyBEUklOSyBZT1VSIE9WQUxUSU5F"

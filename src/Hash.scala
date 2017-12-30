@@ -15,6 +15,7 @@ object Hash {
 
   def rotl(x: Int, n: Int): Int =
     (x >>> (32 - n)) | (x << n)
+  def rotr(x: Int, n: Int): Int = rotl(x, 32 - n)
 
   def sha1Padding(dataLength: Int): Seq[Byte] = {
     val padLen = ((64 + 56) - ((dataLength + 1) % 64)) % 64
@@ -108,6 +109,12 @@ object Hash {
       0x98badcfe,
       0x10325476
     )
+    val QMixed = Seq(
+      0xefcdab89,
+      0x98badcfe,
+      0x10325476,
+      0x67452301
+    )
 
     val k = Seq(
       0x00000000,
@@ -130,6 +137,9 @@ object Hash {
     def G(a: Int, b: Int, c: Int): Int = (a & b) | (a & c) | (b & c)
     def H(a: Int, b: Int, c: Int): Int = a ^ b ^ c
 
+    val xInd2 = IndexedSeq(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15)
+    val xInd3 = IndexedSeq(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)
+
     def md4CalcChunk(chunk: Seq[Byte], Q: Seq[Int]): Seq[Int] = {
       val X = chunk
         .grouped(4)
@@ -145,7 +155,6 @@ object Hash {
         )
       }}
 
-      val xInd2 = IndexedSeq(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15)
       val letters2 = (0 until 16).foldLeft(letters1){case (q, i) =>
         Seq(
           q(d),
@@ -155,7 +164,6 @@ object Hash {
         )
       }
 
-      val xInd3 = IndexedSeq(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)
       val letters3 = (0 until 16).foldLeft(letters2){case (q, i) =>
 
         Seq(
@@ -178,6 +186,196 @@ object Hash {
     def md4(data: Seq[Byte]): Seq[Byte] = {
       val padding = md4Padding(data.length)
       md4FromQ(data ++ padding, MD4.Q)
+    }
+
+    type ConditionSide = Either[(Int, Int, Boolean), Int]
+    case class CollisionCondition(L: Int, R: ConditionSide)
+
+    val collisionSteps = {
+      def letterMsgToStep(l: Int, msg: Int): Int = {
+        val letterVal =
+          if(l == a) 1
+          else if(l == d) 2
+          else if(l == c) 3
+          else 4
+        (msg - 1) * 4 + letterVal
+      }
+      def ccR(bitL: Int, letterR: Int, msgR: Int, bitR: Int, inv: Boolean = false): CollisionCondition =
+        CollisionCondition(bitL, Left(letterMsgToStep(letterR, msgR), bitR, inv))
+      def cc(bitL: Int, value: Int): CollisionCondition =
+        CollisionCondition(bitL, Right(value))
+      case class CollisionStep(step: Int, ccs: Seq[CollisionCondition])
+      def cs(letter: Int, msg: Int, ccs: CollisionCondition*): CollisionStep =
+        CollisionStep(letterMsgToStep(letter, msg), ccs)
+      val not = true
+      // These are directly from table 6 of the paper "Cryptanalsis of the Hash Functions MD4 and RIPEMD" by Wang, Lai,
+      // Feng, Chen and Yu.
+      // Two extra conditions are from "Improved Collision Attack on MD4" by Naito, Sasaki, Kunihiro, and Ohta.
+      val csSeq = Seq(
+        cs(a, 1, ccR(7, b, 0, 7)),
+        cs(d, 1, cc(7, 0), ccR(8, a, 1, 8), ccR(11, a, 1, 11)),
+        cs(c, 1, cc(7, 1), cc(8, 1), cc(11, 0), ccR(26, d, 1, 26)),
+        cs(b, 1, cc(7, 1), cc(8, 0), cc(11, 0), cc(26, 0)),
+        cs(a, 2, cc(8, 1), cc(11, 1), cc(26, 0), ccR(14, b, 1, 14)),
+        cs(d, 2, cc(14, 0), ccR(19, a, 2, 19), ccR(20, a, 2, 20), ccR(21, a, 2, 21), ccR(22, a, 2, 22), cc(26, 1)),
+        cs(c, 2, ccR(13, d, 2, 13), cc(14, 0), ccR(15, d, 2, 15), cc(19, 0), cc(20, 0), cc(21, 1), cc(22, 0)),
+        cs(b, 2, cc(13, 1), cc(14, 1), cc(15, 0), ccR(17, c, 2, 17), cc(19, 0), cc(20, 0), cc(21, 0), cc(22, 0)),
+        cs(a, 3, cc(13, 1), cc(14, 1), cc(15, 1), cc(17, 0), cc(19, 0), cc(20, 0), cc(21, 0), ccR(23, b, 2, 23), cc(22, 1), ccR(26, b, 2, 26)),
+        cs(d, 3, cc(13, 1), cc(14, 1), cc(15, 1), cc(17, 0), cc(20, 0), cc(21, 1), cc(22, 1), cc(23, 0), cc(26, 1), ccR(30, a, 3, 30)),
+        cs(c, 3, cc(17, 1), cc(20, 0), cc(21, 0), cc(22, 0), cc(23, 0), cc(26, 0), cc(30, 1), ccR(32, d, 3, 32)),
+        cs(b, 3, cc(20, 0), cc(21, 1), cc(22, 1), ccR(23, c, 3, 23), cc(26, 1), cc(30, 0), cc(32, 0)),
+        cs(a, 4, cc(23, 0), cc(26, 0), ccR(27, b, 3, 27), ccR(29, b, 3, 29), cc(30, 1), cc(32, 0)),
+        cs(d, 4, cc(23, 0), cc(26, 0), cc(27, 1), cc(29, 1), cc(30, 0), cc(32, 1)),
+        cs(c, 4, ccR(19, d, 4, 19), cc(23, 1), cc(26, 1), cc(27, 0), cc(29, 0), cc(30, 0)),
+        cs(b, 4, cc(19, 0), cc(26, 1), cc(27, 1), cc(29, 1), /*cc(30, 0),*/ ccR(32, c, 4, 32)),
+        cs(a, 5, ccR(19, c, 4, 19), cc(26, 1), cc(27, 0), cc(29, 1), cc(32, 1)),
+        cs(d, 5, ccR(19, a, 5, 19), ccR(26, b, 4, 26), ccR(27, b, 4, 27), ccR(29, b, 4, 29), ccR(32, b, 4, 32)),
+        cs(c, 5, ccR(26, d, 5, 26), ccR(27, d, 5, 27), ccR(29, d, 5, 29), ccR(30, d, 5, 30), ccR(32, d, 5, 32)),
+        cs(b, 5, ccR(29, c, 5, 29), cc(30, 1), cc(32, 0)),
+        cs(a, 6, cc(29, 1), /*cc(30, 0),*/ cc(32, 1)),
+        cs(d, 6, ccR(29, b, 5, 29)),
+        cs(c, 6, ccR(29, d, 6, 29), ccR(30, d, 6, 30, not), ccR(32, d, 6, 32, not)),
+        cs(b, 9, cc(32, 1)),
+        cs(a, 10, cc(32, 1))
+      )
+      csSeq.foldLeft(Map[Int, Seq[CollisionCondition]]()){case (map, cs) => map + (cs.step -> cs.ccs)}
+    }
+
+    def collideMD4: Option[(Seq[Byte], Seq[Byte])] = {
+      /* Q is a stack of states. It initially contains (B[0], C[0], D[0], A[0]).
+       * If a state is added, it adds one to the top. This then becomes
+       * (B[1], B[0], C[0], D[0], A[0]), also known as (B[1], C[1], D[1], A[1], A[0]).
+       * So if Q.length = i, B[i] is always at the top of the stack, C[i] is second, etc.
+       */
+      case class MD4History(Q: List[Int], X: IndexedSeq[Int]) {
+        val num: Int = Q.length - 4
+        val a: Int = Q(3)
+        val b: Int = Q.head
+        val c: Int = Q(1)
+        val d: Int = Q(2)
+        def aP: Int = Q(4)
+        def bP: Int = Q(1)
+        def cP: Int = Q(2)
+        def dP: Int = Q(3)
+
+        def next: MD4History = {
+          val v =
+            if(num < 16) {
+              rotl(a + F(b, c, d) + X(num) + k.head, shift.head(num % 4))
+            } else if(num < 32) {
+              rotl(a + G(b, c, d) + X(xInd2(num - 16)) + k(1), shift(1)(num % 4))
+            } else {
+              rotl(a + H(b, c, d) + X(xInd3(num - 32)) + k(2), shift(2)(num % 4))
+            }
+          MD4History(v +: Q, X)
+        }
+
+        def back: MD4History = {
+          val numP = num - 1
+          val v =
+            if(numP < 16) {
+              rotr(b, shift.head(numP % 4)) - aP - F(bP, cP, dP) - k.head
+            } else if(num < 32) {
+              //rotl(a + G(b, c, d) + X(xInd2(num)) + k(1), shift(1)(num % 4))
+              ???
+            } else {
+              //rotl(a + H(b, c, d) + X(xInd3(num)) + k(2), shift(2)(num % 4))
+              ???
+            }
+          MD4History(Q.tail, X.patch(numP, Seq(v), 1))
+        }
+
+        def fix: MD4History = {
+          if(num <= 16) {
+            def mask(bit: Int): Int = 1 << (bit - 1) // bits are 0-offset
+            def getBit(n: Int, bit: Int): Int = (n & mask(bit)) >>> (bit - 1)
+            collisionSteps.get(num) match {
+              case None => this
+              case Some(steps) =>
+                val newB =
+                  steps.foldLeft(Q.head){case (curB, CollisionCondition(bitL, side)) =>
+                    side match {
+                      case Left((stepR, bitR, target)) =>
+                        if((getBit(curB, bitL) == getBit(Q(num - stepR), bitR)) == target)
+                          curB ^ mask(bitL)
+                        else curB
+                      case Right(value) =>
+                        // If one is false, we need to flip the bit.
+                        if((getBit(curB, bitL) ^ value) == 1)
+                          curB ^ mask(bitL)
+                        else curB
+                    }
+                  }
+                MD4History(newB +: Q.tail, X)
+            }
+          } else if(num <= 32) {
+            // TODO
+            this
+          } else {
+            // Can't do this.
+            this
+          }
+        }
+
+        def nextN(n: Int): MD4History = {
+          (0 until n).foldLeft(this){case (h, _) => h.next}
+        }
+
+        def nextFixN(n: Int): MD4History = {
+          (0 until n).foldLeft(this){case (h, _) => h.next.fix}
+        }
+
+        def backN(n: Int): MD4History = {
+          (0 until n).foldLeft(this){case (h, _) => h.back}
+        }
+      }
+
+      def xToM(X: Seq[Int]): Seq[Byte] =
+        X.flatMap(x => intTo32Bit(x))
+      def mToX(m: Seq[Byte]): IndexedSeq[Int] =
+        m
+          .grouped(4)
+          .map(x => bitsToInt(x))
+          .toIndexedSeq
+
+      val M = AES.randomBytes(64)
+
+      val XA = IndexedSeq(
+        /*0x4d7a9c83, 0x56cb927a, 0xb9d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
+        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dd8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9*/
+        0x839c7a4d, 0x7a92cb56, 0x78a5d5b9, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
+        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edd45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9
+      )
+      val XB = IndexedSeq(
+        /*0x4d7a9c83, 0xd6cb927a, 0x29d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
+        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dc8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9*/
+        0x839c7a4d, 0x7a92cbd6, 0x78a5d529, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
+        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edc45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9
+      )
+
+      val X = XA // mToX(M)
+
+      val fixDepth = 16
+      val history = MD4History(QMixed.toList, X)
+      val history2 = history.nextFixN(fixDepth).backN(fixDepth)
+      assert(history.X == history2.X)
+
+      def flipBit(X: Seq[Int], pos: Int, bit: Int): Seq[Int] = {
+        X.patch(pos, Seq(X(pos) ^ (1 << bit)), 1)
+      }
+      // Flip the bits that are used for the collision differential.
+      // Each item corresponds to a value. For example, (1, 31) => \delta m_1 = 2^{31}.
+      // These are 0-indexed, and signedness doesn't really matter. So we get 4 bits to flip.
+      val newM = xToM(history2.X)
+      val mPrimeX =
+        Seq((1, 31), (2, 31), (2, 28), (12, 16))
+          .foldLeft[Seq[Int]](history2.X){case (acc, (nbInt, bit)) => flipBit(acc, nbInt, bit)}
+      val mPrime = xToM(mPrimeX)
+
+      if (md4(newM) == md4(mPrime))
+        Some((newM, mPrime))
+      else
+        None
     }
   }
 
