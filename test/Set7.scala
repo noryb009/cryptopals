@@ -56,7 +56,9 @@ class Set7 extends FunSpec {
     //val sessionID = "TmV2ZXIgcmV2ZWFsIHRoZSBXdS1UYW5nIFNlY3JldCE="
     val oracle = Crime.oracle(sessionID)_
     val oracleCBC = Crime.oracleCBC(sessionID)_
-    val assertCorrect = (cur: String) => assert(sessionID.startsWith(cur))
+    def assertCorrect(cur: String): Unit = {
+      assert(sessionID.startsWith(cur))
+    }
 
     val result = Crime.attack(oracle, assertCorrect)
     assert(result == sessionID)
@@ -92,16 +94,30 @@ class Set7 extends FunSpec {
     assert(m2.length == m2Len)
   }
 
-  it("C55") {
-    val k = Hash.MD4.md4(Utils.stringToBinary("a")) // TODO: remove
-    val v = (0 to 100000).collectFirst(Function.unlift(_ => Hash.MD4.collideMD4))
+  // This can take a while. For the example below, it took >500000 iterations.
+  ignore("C55") {
+    // Example collision:
+    // 16043f1b135b012fcecd0ec7027ecb7664fd75dab96f5ee9b075884d2b749e28e63f774b7467d9a604f11029fb73b5aa6b40cbb357407205c6570c042aaa5d91
+    // 16043f1b135b01afcecd0e37027ecb7664fd75dab96f5ee9b075884d2b749e28e63f774b7467d9a604f11029fb73b5aa6b40cab357407205c6570c042aaa5d91
 
-    // There's a chance this will be asserted.
+    val iterations = 10000000
+    //val iterations = 1
+    val v = (0 to iterations).collectFirst(Function.unlift{i =>
+      if (i % 100000 == 0) {
+        println(i)
+      }
+      Hash.MD4.collideMD4
+    })
+
+    // There's a chance this will be falsely asserted, since generating a
+    // collision isn't guaranteed.
     assert(v.isDefined)
 
     val (m, mPrime) = v.get
     assert(m != mPrime)
     assert(Hash.md4(m) == Hash.md4(mPrime))
+    println(Hex.encode(m))
+    println(Hex.encode(mPrime))
   }
 
   // This is super slow (>10 minutes), and there's a small chance it fails.

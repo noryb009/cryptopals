@@ -133,12 +133,14 @@ object Hash {
     val c = 2
     val d = 3
 
-    def F(a: Int, b: Int, c: Int): Int = a & b | (~a & c)
+    def F(a: Int, b: Int, c: Int): Int = (a & b) | (~a & c)
     def G(a: Int, b: Int, c: Int): Int = (a & b) | (a & c) | (b & c)
     def H(a: Int, b: Int, c: Int): Int = a ^ b ^ c
 
+    val xInd1 = IndexedSeq(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
     val xInd2 = IndexedSeq(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15)
     val xInd3 = IndexedSeq(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15)
+    val xInds = xInd1 ++ xInd2 ++ xInd3
 
     def md4CalcChunk(chunk: Seq[Byte], Q: Seq[Int]): Seq[Int] = {
       val X = chunk
@@ -165,7 +167,6 @@ object Hash {
       }
 
       val letters3 = (0 until 16).foldLeft(letters2){case (q, i) =>
-
         Seq(
           q(d),
           rotl(q(a) + H(q(b), q(c), q(d)) + X(xInd3(i)) + k(2), shift(2)(i % 4)),
@@ -200,8 +201,10 @@ object Hash {
           else 4
         (msg - 1) * 4 + letterVal
       }
+      // Two bits equal each other (or are unequal).
       def ccR(bitL: Int, letterR: Int, msgR: Int, bitR: Int, inv: Boolean = false): CollisionCondition =
         CollisionCondition(bitL, Left(letterMsgToStep(letterR, msgR), bitR, inv))
+      // A bit equals a certain value.
       def cc(bitL: Int, value: Int): CollisionCondition =
         CollisionCondition(bitL, Right(value))
       case class CollisionStep(step: Int, ccs: Seq[CollisionCondition])
@@ -229,7 +232,7 @@ object Hash {
         cs(c, 4, ccR(19, d, 4, 19), cc(23, 1), cc(26, 1), cc(27, 0), cc(29, 0), cc(30, 0)),
         cs(b, 4, cc(19, 0), cc(26, 1), cc(27, 1), cc(29, 1), /*cc(30, 0),*/ ccR(32, c, 4, 32)),
         cs(a, 5, ccR(19, c, 4, 19), cc(26, 1), cc(27, 0), cc(29, 1), cc(32, 1)),
-        cs(d, 5, ccR(19, a, 5, 19), ccR(26, b, 4, 26), ccR(27, b, 4, 27), ccR(29, b, 4, 29), ccR(32, b, 4, 32)),
+        cs(d, 5, /*ccR(19, a, 5, 19), ccR(26, b, 4, 26), ccR(27, b, 4, 27),*/ ccR(29, b, 4, 29), ccR(32, b, 4, 32)),
         cs(c, 5, ccR(26, d, 5, 26), ccR(27, d, 5, 27), ccR(29, d, 5, 29), ccR(30, d, 5, 30), ccR(32, d, 5, 32)),
         cs(b, 5, ccR(29, c, 5, 29), cc(30, 1), cc(32, 0)),
         cs(a, 6, cc(29, 1), /*cc(30, 0),*/ cc(32, 1)),
@@ -258,62 +261,124 @@ object Hash {
         def cP: Int = Q(2)
         def dP: Int = Q(3)
 
+        def getNextMD4Item: Int = {
+          if(num < 16) {
+            rotl(a + F(b, c, d) + X(num) + k.head, shift.head(num % 4))
+          } else if(num < 32) {
+            rotl(a + G(b, c, d) + X(xInd2(num - 16)) + k(1), shift(1)(num % 4))
+          } else {
+            rotl(a + H(b, c, d) + X(xInd3(num - 32)) + k(2), shift(2)(num % 4))
+          }
+        }
+
+        /* This makes a MD4History that corresponds to the next step of the
+         * regular MD4 algorithm.
+         */
         def next: MD4History = {
-          val v =
-            if(num < 16) {
-              rotl(a + F(b, c, d) + X(num) + k.head, shift.head(num % 4))
-            } else if(num < 32) {
-              rotl(a + G(b, c, d) + X(xInd2(num - 16)) + k(1), shift(1)(num % 4))
-            } else {
-              rotl(a + H(b, c, d) + X(xInd3(num - 32)) + k(2), shift(2)(num % 4))
-            }
+          val v = getNextMD4Item
           MD4History(v +: Q, X)
         }
 
-        def back: MD4History = {
-          val numP = num - 1
-          val v =
-            if(numP < 16) {
-              rotr(b, shift.head(numP % 4)) - aP - F(bP, cP, dP) - k.head
-            } else if(num < 32) {
-              //rotl(a + G(b, c, d) + X(xInd2(num)) + k(1), shift(1)(num % 4))
-              ???
-            } else {
-              //rotl(a + H(b, c, d) + X(xInd3(num)) + k(2), shift(2)(num % 4))
-              ???
-            }
-          MD4History(Q.tail, X.patch(numP, Seq(v), 1))
+        def mask(bit: Int): Int = 1 << (bit - 1) // Bits in the table are 1-based.
+        def getBit(n: Int, bit: Int): Int = (n & mask(bit)) >>> (bit - 1)
+
+        def check: MD4History = {
+          collisionSteps.get(num) match {
+            case None =>
+            case Some(steps) =>
+              val curB = Q.head
+              steps.foreach{
+                case CollisionCondition(bitL, Left((stepR, bitR, target))) =>
+                  assert((getBit(curB, bitL) == getBit(Q(num - stepR), bitR)) != target,
+                    "Failed assert on round " + num)
+                case CollisionCondition(bitL, Right(value)) =>
+                  assert((getBit(curB, bitL) ^ value) != 1,
+                    "Failed assert on round " + num)
+              }
+          }
+          this
         }
 
+        /* This first determines what we want the latest state to be (applying
+         * properties from Table 6 in Wang's paper as necessary), then calls
+         * fixInner.
+         */
         def fix: MD4History = {
-          if(num <= 16) {
-            def mask(bit: Int): Int = 1 << (bit - 1) // bits are 0-offset
-            def getBit(n: Int, bit: Int): Int = (n & mask(bit)) >>> (bit - 1)
-            collisionSteps.get(num) match {
-              case None => this
-              case Some(steps) =>
-                val newB =
-                  steps.foldLeft(Q.head){case (curB, CollisionCondition(bitL, side)) =>
-                    side match {
-                      case Left((stepR, bitR, target)) =>
-                        if((getBit(curB, bitL) == getBit(Q(num - stepR), bitR)) == target)
-                          curB ^ mask(bitL)
-                        else curB
-                      case Right(value) =>
-                        // If one is false, we need to flip the bit.
-                        if((getBit(curB, bitL) ^ value) == 1)
-                          curB ^ mask(bitL)
-                        else curB
-                    }
+          collisionSteps.get(num) match {
+            case None => this
+            case Some(steps) => {
+              val newB =
+                steps.foldLeft(Q.head){case (curB, CollisionCondition(bitL, side)) =>
+                  side match {
+                    case Left((stepR, bitR, target)) =>
+                      if((getBit(curB, bitL) == getBit(Q(num - stepR), bitR)) == target)
+                        curB ^ mask(bitL)
+                      else curB
+                    case Right(value) =>
+                      // If one is false, we need to flip the bit.
+                      if((getBit(curB, bitL) ^ value) == 1)
+                        curB ^ mask(bitL)
+                      else curB
                   }
-                MD4History(newB +: Q.tail, X)
+                }
+
+              val newQ = newB +: Q.tail
+              MD4History(newQ, X).fixInner
             }
-          } else if(num <= 32) {
-            // TODO
-            this
+          }
+        }
+
+        /* Given an inconsistent state, with a Q that works well for creating
+         * collisions but an X that does not create the latest state, this
+         * function modifies X so that it does create the latest state in Q.
+         */
+        def fixInner: MD4History = {
+          // Note: We just updated newB, which was generated using
+          // X[something], aP, bP, cP and dP.
+          val newB = b
+          val prevStep = num - 1
+          val prevStepRound = prevStep / 16
+          // We always need to recreate the message used in the previous step.
+          val mixFn: (Int, Int, Int) => Int =
+            prevStepRound match {
+              case 0 => F
+              case 1 => G
+            }
+          val newMessageItem =
+            rotr(newB, shift(prevStepRound)(prevStep % 4)) - aP - mixFn(bP, cP, dP) - k(prevStepRound)
+          val newX = X.patch(xInds(prevStep), Seq(newMessageItem), 1)
+          if(prevStep < 16) {
+            // We used X[prevStep]. Since this hasn't been used yet in the
+            // algorithm, so it doesn't matter that we changed it.
+            MD4History(Q, newX)
+          } else if(prevStep < 32) {
+            // X[xInds(prevStep)] was used to generate Qrev[4 + xInds(prevStep)]
+            // (the 4 is from the initial 4 states).
+            // In turn, this was used to calculate Qrev[4 + xInds(prevStep) + i],
+            // for i = 1 to 4. We don't want to change these 4 states, so we
+            // want to patch up the 4 messages used to generate them.
+            // First, we want to get the new Qrev[4 + xInds(prevStep)].
+            // Instead of reversing Q, we can calculate this.
+            val extra = Q.length - 4 - xInds(prevStep)
+            val newQState = MD4History(Q.drop(extra), newX).getNextMD4Item
+            val newQ = Q.patch(extra - 1, Seq(newQState), 1)
+            val newQIndexed = newQ.toIndexedSeq
+            // Calculate new messages.
+            val vFollowing = Seq.tabulate(4){n =>
+              val step = xInds(prevStep) + 1 + n
+              val qStart = extra - 2 - n
+              val newBB = newQIndexed(qStart)
+              val bb = newQIndexed(qStart + 1)
+              val cc = newQIndexed(qStart + 2)
+              val dd = newQIndexed(qStart + 3)
+              val aa = newQIndexed(qStart + 4)
+              rotr(newBB, shift.head(step % 4)) - aa - F(bb, cc, dd) - k.head
+            }
+
+            val newX2 = newX.patch(xInds(prevStep) + 1, vFollowing, 4)
+            MD4History(newQ, newX2)
           } else {
-            // Can't do this.
-            this
+            ???
           }
         }
 
@@ -325,8 +390,8 @@ object Hash {
           (0 until n).foldLeft(this){case (h, _) => h.next.fix}
         }
 
-        def backN(n: Int): MD4History = {
-          (0 until n).foldLeft(this){case (h, _) => h.back}
+        def nextCheckN(n: Int): MD4History = {
+          (0 until n).foldLeft(this){case (h, _) => h.next.check}
         }
       }
 
@@ -340,40 +405,60 @@ object Hash {
 
       val M = AES.randomBytes(64)
 
+      // Some collisions to test with.
       val XA = IndexedSeq(
-        /*0x4d7a9c83, 0x56cb927a, 0xb9d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
-        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dd8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9*/
-        0x839c7a4d, 0x7a92cb56, 0x78a5d5b9, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
-        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edd45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9
+        0x4d7a9c83, 0x56cb927a, 0xb9d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
+        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dd8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9
+        /*0x839c7a4d, 0x7a92cb56, 0x78a5d5b9, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
+        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edd45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9*/
       )
       val XB = IndexedSeq(
-        /*0x4d7a9c83, 0xd6cb927a, 0x29d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
-        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dc8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9*/
-        0x839c7a4d, 0x7a92cbd6, 0x78a5d529, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
-        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edc45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9
+        0x4d7a9c83, 0xd6cb927a, 0x29d5a578, 0x57a7a5ee, 0xde748a3c, 0xdcc366b3, 0xb683a020, 0x3b2a5d9f,
+        0xc69d71b3, 0xf9e99198, 0xd79f805e, 0xa63bb2e8, 0x45dc8e31, 0x97e31fe5, 0x2794bf08, 0xb9e8c3e9
+        /*0x839c7a4d, 0x7a92cbd6, 0x78a5d529, 0xeea5a757, 0x3c8a74de, 0xb366c3dc, 0x20a083b6, 0x9f5d2a3b,
+        0xb3719dc6, 0x9891e9f9, 0x5e809fd7, 0xe8b23ba6, 0x318edc45, 0xe51fe397, 0x08bf9427, 0xe9c3e8b9*/
       )
 
-      val X = XA // mToX(M)
+      val X = mToX(M)
+      //val X = XA
 
-      val fixDepth = 16
       val history = MD4History(QMixed.toList, X)
-      val history2 = history.nextFixN(fixDepth).backN(fixDepth)
-      assert(history.X == history2.X)
+      val history2 = history
+        // Fix first round constraints.
+        .nextFixN(16)
+        // Fix a5. This updates m[0] - m[4].
+        .nextFixN(1)
+        // Fix d5. This updates m[4] - m[8].
+        .nextFixN(1)
+      // Fixing any more clobbers first round constraints.
+      //assert(history2.X == X)
 
-      def flipBit(X: Seq[Int], pos: Int, bit: Int): Seq[Int] = {
-        X.patch(pos, Seq(X(pos) ^ (1 << bit)), 1)
+      def addModifier(X: Seq[Int], pos: Int, delta: Int): Seq[Int] = {
+        X.patch(pos, Seq(X(pos) + delta), 1)
       }
-      // Flip the bits that are used for the collision differential.
-      // Each item corresponds to a value. For example, (1, 31) => \delta m_1 = 2^{31}.
-      // These are 0-indexed, and signedness doesn't really matter. So we get 4 bits to flip.
+      // Add modifiers that are used for the collision differential.
+      // Each item corresponds to a value. For example, (1, 1 << 31) => \delta m_1 = 2^{31}.
+      // These are 0-indexed.
       val newM = xToM(history2.X)
       val mPrimeX =
-        Seq((1, 31), (2, 31), (2, 28), (12, 16))
-          .foldLeft[Seq[Int]](history2.X){case (acc, (nbInt, bit)) => flipBit(acc, nbInt, bit)}
+        Seq((1, 1 << 31), (2, 1 << 31), (2, -(1 << 28)), (12, -(1 << 16)))
+          .foldLeft[Seq[Int]](history2.X){case (acc, (nbInt, delta)) => addModifier(acc, nbInt, delta)}
       val mPrime = xToM(mPrimeX)
 
-      if (md4(newM) == md4(mPrime))
-        Some((newM, mPrime))
+      // Note: The 18th iteration constraints (the first 3, specifically)
+      // sometimes clobber first round constraints. But this happens <50%
+      // of the time, so including them is worth it.
+      val check = false
+      if (check) {
+        MD4History(QMixed.toList, history2.X)
+          .nextCheckN(18)
+      }
+
+      val newM2 = newM.grouped(4).flatMap(_.reverse).toSeq
+      val mPrime2 = mPrime.grouped(4).flatMap(_.reverse).toSeq
+
+      if (md4(newM2) == md4(mPrime2))
+        Some((newM2, mPrime2))
       else
         None
     }

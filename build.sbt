@@ -1,6 +1,6 @@
-scalaVersion := "2.11.7"
+scalaVersion := "2.12.5"
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.5" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
 
 scalaSource in Compile := baseDirectory.value / "src"
 
